@@ -12,6 +12,8 @@ interface Device {
   selected: boolean;
   groupId: number | null;
   groupName?: string | null;
+  created_at?: string;
+  last_active_at?: string;
 }
 
 interface Group {
@@ -25,6 +27,16 @@ interface DeviceHistoryEntry {
   time: number;
   status: string;
   note: string;
+}
+
+interface DeviceSchedule {
+  id: number;
+  device_id: number;
+  cron: string;
+  action: string;
+  action_params: Record<string, any>;
+  description: string | null;
+  enabled: boolean;
 }
 
 function App() {
@@ -42,14 +54,33 @@ function App() {
   const [groupName, setGroupName] = useState("");
   const [deviceHistory, setDeviceHistory] = useState<Record<number, DeviceHistoryEntry[]>>({});
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
+  const [deviceSchedules, setDeviceSchedules] = useState<Record<number, DeviceSchedule[]>>({});
+  const [scheduleCron, setScheduleCron] = useState("0 7 * * *");
+  const [scheduleAction, setScheduleAction] = useState("poweron");
+  const [scheduleTarget, setScheduleTarget] = useState("");
+  const [scheduleDescription, setScheduleDescription] = useState("");
+  const [scheduleEnabled, setScheduleEnabled] = useState(true);
+  const [scheduleSequence, setScheduleSequence] = useState<any[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [currentStepAction, setCurrentStepAction] = useState("poweron");
+  const [currentStepParam, setCurrentStepParam] = useState("");
+  const [currentStepDelay, setCurrentStepDelay] = useState("");
+  const [currentStepWaitForReady, setCurrentStepWaitForReady] = useState("");
+  const [currentStepSettle, setCurrentStepSettle] = useState("");
+  const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
+  const [detailTab, setDetailTab] = useState<"info" | "schedule">("info");
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [powerFilter, setPowerFilter] = useState("all");
+  const [activityFilter, setActivityFilter] = useState("all");
+  const [registrationFrom, setRegistrationFrom] = useState("");
+  const [registrationTo, setRegistrationTo] = useState("");
   const [backendUrl, setBackendUrl] = useState("http://localhost:5000");
   const [schedulerOn, setSchedulerOn] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState("");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const initialLoadRef = useRef(false);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -64,6 +95,21 @@ function App() {
   } | null>(null);
 
   const baseUrl = backendUrl.replace(/\/$/, "");
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("appTheme");
+    if (savedTheme === "dark" || savedTheme === "light") {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("appTheme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((current) => (current === "light" ? "dark" : "light"));
+  };
 
   useEffect(() => {
     if (initialLoadRef.current) return;
@@ -120,6 +166,357 @@ function App() {
       console.error("Ucitavanje grupa nije uspjelo:", error);
     }
   };
+
+  const loadDeviceSchedules = async (deviceId: number) => {
+    try {
+      const response = await fetch(`${baseUrl}/devices/${deviceId}/schedules`);
+      const data = await response.json();
+      setDeviceSchedules((prev) => ({ ...prev, [deviceId]: data }));
+    } catch (error) {
+      console.error("Učitavanje rasporeda nije uspjelo:", error);
+      setDeviceSchedules((prev) => ({ ...prev, [deviceId]: [] }));
+    }
+  };
+
+  useEffect(() => {
+    if (selectedDeviceId !== null) {
+      loadDeviceSchedules(selectedDeviceId);
+      setDetailTab("info");
+    }
+  }, [selectedDeviceId, baseUrl]);
+
+  const getDeviceSchedules = (deviceId: number) => deviceSchedules[deviceId] || [];
+
+  const scheduleActions = [
+    { value: "poweron", label: "Uključi TV", supportedBrands: ["all"], description: "Uključi uređaj pomoću WOL ili branda." },
+    { value: "poweroff", label: "Isključi TV", supportedBrands: ["all"], description: "Isključi uređaj putem dostupnog protokola." },
+    { value: "restart", label: "Restart TV", supportedBrands: ["all"], description: "Pošalji restart naredbu ili WOL paket." },
+    { value: "launchApp", label: "Otvori aplikaciju / URL", supportedBrands: ["webos"], description: "Pokreni aplikaciju ili otvori URL na webOS uređaju.", requiresParameter: true, parameterLabel: "App ID ili URL" },
+    { value: "mute", label: "Mute zvuk", supportedBrands: ["webos"], description: "Isključi zvuk na webOS uređaju." },
+    { value: "unmute", label: "Unmute zvuk", supportedBrands: ["webos"], description: "Uključi zvuk na webOS uređaju." },
+    { value: "volumeUp", label: "Pojačaj zvuk", supportedBrands: ["webos"], description: "Povećaj glasnoću na webOS uređaju." },
+    { value: "volumeDown", label: "Smanji zvuk", supportedBrands: ["webos"], description: "Smanji glasnoću na webOS uređaju." },
+    { value: "setVolume", label: "Postavi jačinu zvuka", supportedBrands: ["webos"], description: "Postavi preciznu jačinu zvuka 0-100.", requiresParameter: true, parameterLabel: "Volumen 0-100" },
+  ];
+
+  const getAvailableActions = (device: Device | null) => {
+    if (!device) {
+      return scheduleActions;
+    }
+
+    const brand = device.brand?.toLowerCase() || "generic";
+    return scheduleActions.filter((action) =>
+      action.supportedBrands.includes("all") || action.supportedBrands.includes(brand)
+    );
+  };
+
+  const clearScheduleForm = () => {
+    setScheduleCron("0 7 * * *");
+    setScheduleAction("poweron");
+    setScheduleTarget("");
+    setScheduleDescription("");
+    setScheduleEnabled(true);
+    setEditingScheduleId(null);
+    setScheduleSequence([]);
+  };
+
+  const isCronValid = (expression: string) => {
+    const parts = expression.trim().split(/\s+/);
+    if (parts.length < 5 || parts.length > 6) {
+      return false;
+    }
+
+    const fieldPattern = /^([*]|[0-9]|[1-5]?[0-9]|[1-2]?[0-9]|[1-3]?[0-9]|[1-7]|[0-9]-[0-9]|[0-9](,\s*[0-9])*(\/[0-9]+)?|\*[\/][0-9]+|[0-9]+-[0-9]+(\/\d+)?)$/;
+    return parts.every((field) => fieldPattern.test(field) || field.includes("*") || field.includes("/") || field.includes(",") || field.includes("-"));
+  };
+
+  const getActionLabel = (action: string) => {
+    switch (action) {
+      case "poweron":
+        return "Uključi TV";
+      case "poweroff":
+        return "Isključi TV";
+      case "restart":
+        return "Restart TV";
+      case "launchApp":
+        return "Otvori aplikaciju / URL";
+      case "mute":
+        return "Mute zvuk";
+      case "unmute":
+        return "Unmute zvuk";
+      case "volumeUp":
+        return "Pojačaj zvuk";
+      case "volumeDown":
+        return "Smanji zvuk";
+      case "setVolume":
+        return "Postavi jačinu zvuka";
+      default:
+        return action;
+    }
+  };
+
+  const cronValid = isCronValid(scheduleCron);
+
+  const handleEditSchedule = (schedule: DeviceSchedule) => {
+    const available = getAvailableActions(selectedDevice);
+    const supportedAction = available.some((action) => action.value === schedule.action)
+      ? schedule.action
+      : available[0]?.value || "poweron";
+
+    setEditingScheduleId(schedule.id);
+    setScheduleCron(schedule.cron);
+    setScheduleAction(supportedAction);
+    setScheduleTarget(
+      supportedAction === "launchApp"
+        ? schedule.action_params?.target || ""
+        : supportedAction === "setVolume"
+        ? String(schedule.action_params?.volume || "")
+        : ""
+    );
+    setScheduleDescription(schedule.description || "");
+    setScheduleEnabled(schedule.enabled);
+    setDetailTab("schedule");
+    // populate sequence if stored as sequence
+    try {
+      const params = schedule.action_params || {};
+      if (schedule.action === "sequence" && params && Array.isArray(params.sequence)) {
+        setScheduleSequence(params.sequence.map((s: any) => ({ ...s })));
+      } else {
+        setScheduleSequence([]);
+      }
+    } catch (e) {
+      setScheduleSequence([]);
+    }
+  };
+
+  const handleSaveSchedule = async () => {
+    if (!selectedDeviceId) {
+      showMessage("Greška", "Nema odabranog uređaja za raspored.");
+      return;
+    }
+
+    if (!scheduleCron.trim()) {
+      showMessage("Greška", "Unesi cron izraz.");
+      return;
+    }
+
+    if (!isCronValid(scheduleCron.trim())) {
+      showMessage("Greška", "Cron izraz nije valjan. Koristi format s 5 polja poput: 0 7 * * *.");
+      return;
+    }
+
+    if (scheduleAction === "launchApp" && !scheduleTarget.trim()) {
+      showMessage("Greška", "Unesi aplikaciju ili URL.");
+      return;
+    }
+
+    if (scheduleAction === "setVolume") {
+      const volume = Number(scheduleTarget);
+      if (Number.isNaN(volume) || volume < 0 || volume > 100) {
+        showMessage("Greška", "Unesi volumen između 0 i 100.");
+        return;
+      }
+    }
+
+    // Build payload: if sequence steps exist, send as `actions` array
+    let payload: any;
+    if (Array.isArray(scheduleSequence) && scheduleSequence.length > 0) {
+      payload = {
+        cron: scheduleCron.trim(),
+        actions: scheduleSequence.map((s) => ({
+          action: s.action,
+          params: s.params || {},
+          delayMs: s.delayMs || undefined,
+          waitForReadyMs: s.waitForReadyMs || undefined,
+          settleMs: s.settleMs || undefined,
+        })),
+        description: scheduleDescription.trim(),
+        enabled: scheduleEnabled,
+      };
+    } else {
+      payload = {
+        cron: scheduleCron.trim(),
+        action: scheduleAction,
+        action_params:
+          scheduleAction === "launchApp"
+            ? { target: scheduleTarget.trim() }
+            : scheduleAction === "setVolume"
+            ? { volume: Number(scheduleTarget) }
+            : {},
+        description: scheduleDescription.trim(),
+        enabled: scheduleEnabled,
+      };
+    }
+
+    const available = getAvailableActions(selectedDevice);
+    if (!available.some((action) => action.value === scheduleAction)) {
+      showMessage("Greška", "Odabrana akcija nije podržana za ovaj uređaj.");
+      return;
+    }
+
+    try {
+      const url = editingScheduleId
+        ? `${baseUrl}/devices/${selectedDeviceId}/schedules/${editingScheduleId}`
+        : `${baseUrl}/devices/${selectedDeviceId}/schedules`;
+      const method = editingScheduleId ? "PUT" : "POST";
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        showMessage("Greška", errorData?.error || "Neuspješno spremanje rasporeda.");
+        return;
+      }
+
+      await loadDeviceSchedules(selectedDeviceId);
+      clearScheduleForm();
+      showMessage("Info", "Raspored spremljen.");
+    } catch (error) {
+      console.error("Spremanje rasporeda nije uspjelo:", error);
+      showMessage("Greška", "Greška pri spremanju rasporeda.");
+    }
+  };
+
+  const addStepToSequence = () => {
+    const step: any = { action: currentStepAction };
+    if (currentStepParam && currentStepAction === "launchApp") {
+      step.params = { target: currentStepParam.trim() };
+    }
+    if (currentStepParam && currentStepAction === "setVolume") {
+      const v = Number(currentStepParam);
+      if (!Number.isNaN(v)) {
+        step.params = { volume: v };
+      }
+    }
+    if (currentStepDelay) step.delayMs = Number(currentStepDelay);
+    if (currentStepWaitForReady) step.waitForReadyMs = Number(currentStepWaitForReady);
+    if (currentStepSettle) step.settleMs = Number(currentStepSettle);
+
+    setScheduleSequence((prev) => [...prev, step]);
+
+    // reset current step fields
+    setCurrentStepParam("");
+    setCurrentStepDelay("");
+    setCurrentStepWaitForReady("");
+    setCurrentStepSettle("");
+  };
+
+  const removeStep = (index: number) => {
+    setScheduleSequence((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  
+
+  const reorderSteps = (from: number, to: number) => {
+    setScheduleSequence((prev) => {
+      const arr = [...prev];
+      if (from < 0 || from >= arr.length) return arr;
+      const item = arr.splice(from, 1)[0];
+      // if dropping after removal and target index equals length, push to end
+      const insertAt = Math.min(Math.max(0, to), arr.length);
+      arr.splice(insertAt, 0, item);
+      return arr;
+    });
+    setDragIndex(null);
+  };
+
+  const onDragStart = (e: React.DragEvent, idx: number) => {
+    try {
+      e.dataTransfer.setData('text/plain', String(idx));
+      e.dataTransfer.effectAllowed = 'move';
+      setDragIndex(idx);
+    } catch (err) {}
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const onDrop = (e: React.DragEvent, idx: number) => {
+    e.preventDefault();
+    const from = Number(e.dataTransfer.getData('text/plain'));
+    if (!Number.isNaN(from)) reorderSteps(from, idx);
+  };
+
+  const handleDeleteSchedule = async (scheduleId: number) => {
+    if (!selectedDeviceId) {
+      return;
+    }
+
+    try {
+      await fetch(`${baseUrl}/devices/${selectedDeviceId}/schedules/${scheduleId}`, {
+        method: "DELETE",
+      });
+      await loadDeviceSchedules(selectedDeviceId);
+      showMessage("Info", "Raspored obrisan.");
+    } catch (error) {
+      console.error("Brisanje rasporeda nije uspjelo:", error);
+      showMessage("Greška", "Greška pri brisanju rasporeda.");
+    }
+  };
+
+  const handleToggleSchedule = async (schedule: DeviceSchedule) => {
+    if (!selectedDeviceId) {
+      return;
+    }
+
+    try {
+      await fetch(`${baseUrl}/devices/${selectedDeviceId}/schedules/${schedule.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cron: schedule.cron,
+          action: schedule.action,
+          action_params: schedule.action_params || {},
+          description: schedule.description || "",
+          enabled: !schedule.enabled,
+        }),
+      });
+      await loadDeviceSchedules(selectedDeviceId);
+    } catch (error) {
+      console.error("Ažuriranje rasporeda nije uspjelo:", error);
+      showMessage("Greška", "Greška pri ažuriranju rasporeda.");
+    }
+  };
+
+  const fetchScheduleLogs = async (schedule: DeviceSchedule) => {
+    try {
+      const response = await fetch(`${baseUrl}/devices/${selectedDeviceId}/schedules/${schedule.id}/logs`);
+      if (!response.ok) {
+        showMessage('Greška', 'Ne mogu dohvatiti logove.');
+        return;
+      }
+      const data = await response.json();
+      if (!Array.isArray(data) || data.length === 0) {
+        showMessage('Logovi', 'Nema zapisa za ovaj raspored.');
+        return;
+      }
+      const text = data.map((r: any) => `${r.created_at} [${r.status}] ${r.details || ''}`).join('\n\n');
+      showMessage('Logovi rasporeda', text);
+    } catch (e) {
+      console.error('Dohvat logova nije uspio', e);
+      showMessage('Greška', 'Dohvat logova nije uspio');
+    }
+  };
+
+    const handleTriggerSchedule = async (schedule: DeviceSchedule) => {
+      if (!selectedDeviceId) return;
+      try {
+        const resp = await fetch(`${baseUrl}/devices/${selectedDeviceId}/schedules/${schedule.id}/trigger`, { method: 'POST' });
+        if (!resp.ok) {
+          showMessage('Greška', 'Ne mogu pokrenuti raspored.');
+          return;
+        }
+        showMessage('Info', 'Raspored je pokrenut (manualni trigger).');
+      } catch (e) {
+        console.error('Trigger rasporeda nije uspio', e);
+        showMessage('Greška', 'Trigger rasporeda nije uspio');
+      }
+    };
 
   const recordDeviceEvent = (device: Device, note: string) => {
     setDeviceHistory((prevHistory) => {
@@ -673,7 +1070,8 @@ function App() {
   const filteredDevices = devices.filter((device) => {
     const matchesSearch =
       device.name.toLowerCase().includes(search.toLowerCase()) ||
-      device.ip.includes(search);
+      device.ip.includes(search) ||
+      device.mac.toLowerCase().includes(search.toLowerCase());
 
     const matchesGroup =
       groupFilter === null ||
@@ -689,7 +1087,40 @@ function App() {
       (powerFilter === "on" && device.powerState === "On") ||
       (powerFilter === "off" && device.powerState === "Off");
 
-    return matchesSearch && matchesGroup && matchesStatus && matchesPower;
+    const lastActive = device.last_active_at ? new Date(device.last_active_at) : null;
+    const now = new Date();
+    const matchesActivity = (() => {
+      switch (activityFilter) {
+        case "active24h":
+          return lastActive ? now.getTime() - lastActive.getTime() <= 1000 * 60 * 60 * 24 : false;
+        case "active7d":
+          return lastActive ? now.getTime() - lastActive.getTime() <= 1000 * 60 * 60 * 24 * 7 : false;
+        case "inactive7d":
+          return lastActive ? now.getTime() - lastActive.getTime() > 1000 * 60 * 60 * 24 * 7 : true;
+        case "inactive30d":
+          return lastActive ? now.getTime() - lastActive.getTime() > 1000 * 60 * 60 * 24 * 30 : true;
+        default:
+          return true;
+      }
+    })();
+
+    const createdAt = device.created_at ? new Date(device.created_at) : null;
+    const fromDate = registrationFrom ? new Date(registrationFrom) : null;
+    const toDate = registrationTo ? new Date(registrationTo) : null;
+    const matchesRegistrationFrom =
+      !fromDate || (createdAt ? createdAt >= fromDate : false);
+    const matchesRegistrationTo =
+      !toDate || (createdAt ? createdAt <= toDate : false);
+
+    return (
+      matchesSearch &&
+      matchesGroup &&
+      matchesStatus &&
+      matchesPower &&
+      matchesActivity &&
+      matchesRegistrationFrom &&
+      matchesRegistrationTo
+    );
   });
 
   const selectedDevice = devices.find((device) => device.id === selectedDeviceId) || null;
@@ -757,7 +1188,7 @@ function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app theme-${theme}`}>
       <aside className="sidebar">
         <h2>LG TV Upravljač</h2>
         <div className="sidebar-menu">
@@ -838,7 +1269,10 @@ function App() {
                     }}
                   />
                 </div>
-                <div>{onlineCount} / {devices.length}</div>
+                <div className="chart-metrics">
+                  <span className="chart-value">{onlineCount}</span>
+                  <span className="chart-meta">od {devices.length} ukupno</span>
+                </div>
               </div>
               <div className="chart-card">
                 <div className="chart-title">Uređaji van mreže</div>
@@ -850,56 +1284,37 @@ function App() {
                     }}
                   />
                 </div>
-                <div>{offlineCount} / {devices.length}</div>
+                <div className="chart-metrics">
+                  <span className="chart-value">{offlineCount}</span>
+                  <span className="chart-meta">od {devices.length} ukupno</span>
+                </div>
               </div>
             </div>
 
             {devices.length > 0 && (
               <div className="pie-chart-container">
                 <h2>Distribuacija statusa uređaja</h2>
-                <svg className="pie-chart" viewBox="0 0 200 200" style={{ maxWidth: '300px', margin: '20px auto' }}>
-                  <circle cx="100" cy="100" r="90" fill="none" stroke="#e2e8f0" strokeWidth="60" />
-                  {onlineCount > 0 && (
-                    <circle
-                      cx="100"
-                      cy="100"
-                      r="90"
-                      fill="none"
-                      stroke="#22c55e"
-                      strokeWidth="60"
-                      strokeDasharray={`${(onlineCount / devices.length) * 565.5} 565.5`}
-                      strokeLinecap="round"
-                      transform="rotate(-90 100 100)"
-                    />
-                  )}
-                  {offlineCount > 0 && (
-                    <circle
-                      cx="100"
-                      cy="100"
-                      r="90"
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth="60"
-                      strokeDasharray={`${(offlineCount / devices.length) * 565.5} 565.5`}
-                      strokeLinecap="round"
-                      transform={`rotate(${(onlineCount / devices.length) * 360 - 90} 100 100)`}
-                    />
-                  )}
-                  <text x="100" y="90" textAnchor="middle" fontSize="24" fontWeight="700" fill="#1f2937">
-                    {devices.length}
-                  </text>
-                  <text x="100" y="115" textAnchor="middle" fontSize="14" fill="#4b5563">
-                    uređaja
-                  </text>
-                </svg>
-                <div className="pie-legend">
-                  <div className="pie-legend-item">
-                    <span className="pie-legend-dot online"></span>
-                    <span>Na mreži ({onlineCount})</span>
+                <div className="pie-chart-donut-wrapper">
+                  <div
+                    className="pie-chart-donut"
+                    style={{
+                      background: `conic-gradient(#818cf8 ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg, #f59e0b ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg 360deg)`,
+                    }}
+                  >
+                    <div className="donut-center">
+                      <div className="donut-count">{devices.length}</div>
+                      <div className="donut-label">uređaja</div>
+                    </div>
                   </div>
-                  <div className="pie-legend-item">
-                    <span className="pie-legend-dot offline"></span>
-                    <span>Van mreže ({offlineCount})</span>
+                  <div className="pie-legend">
+                    <div className="pie-legend-item">
+                      <span className="pie-legend-dot online"></span>
+                      <span>Na mreži ({onlineCount})</span>
+                    </div>
+                    <div className="pie-legend-item">
+                      <span className="pie-legend-dot offline"></span>
+                      <span>Van mreže ({offlineCount})</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1082,25 +1497,32 @@ function App() {
           <>
             <div className="top-bar">
               <div>
-                <h1>Uređaji</h1>
+                <h1 style={{ color: "white" }}>Uređaji</h1>
                 <p className="page-description">
                   Pronađi uređaje brzo, upravljaj grupama i primjeni postavke u nekoliko klikova.
                 </p>
                 <p className="last-refresh">Zadnje osvježenje: {lastRefresh || "još nije osvježeno"}</p>
               </div>
               <div className="top-bar-actions">
-                <button type="button" className="refresh-btn" onClick={refreshAll}>
-                  Osvježi
-                </button>
-                <button type="button" className="action-btn poweron-btn" onClick={handlePowerOnAll}>
-                  Upali sve TV-e
-                </button>
-                <button type="button" className="action-btn poweroff-btn" onClick={handlePowerOffAll}>
-                  Isključi sve TV-e
-                </button>
-                <button type="button" className="add-btn" onClick={handleOpenModal}>
-                  + Dodaj uređaj
-                </button>
+                <div className="top-bar-group">
+                  <button type="button" className="theme-toggle-btn" onClick={toggleTheme}>
+                    {theme === "light" ? "Dark mode 🌙" : "Light mode ☀️"}
+                  </button>
+                  <button type="button" className="refresh-btn" onClick={refreshAll}>
+                    Osvježi
+                  </button>
+                </div>
+                <div className="top-bar-group">
+                  <button type="button" className="action-btn poweron-btn" onClick={handlePowerOnAll}>
+                    Upali sve TV-e
+                  </button>
+                  <button type="button" className="action-btn poweroff-btn" onClick={handlePowerOffAll}>
+                    Isključi sve TV-e
+                  </button>
+                  <button type="button" className="add-btn" onClick={handleOpenModal}>
+                    + Dodaj uređaj
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1247,7 +1669,7 @@ function App() {
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
-                <option value="all">Sve statusi</option>
+                <option value="all">Sve statuse</option>
                 <option value="online">Samo online</option>
                 <option value="offline">Samo offline</option>
               </select>
@@ -1260,6 +1682,31 @@ function App() {
                 <option value="on">Samo upaljeni</option>
                 <option value="off">Samo ugašeni</option>
               </select>
+              <select
+                className="small-select select-box"
+                value={activityFilter}
+                onChange={(e) => setActivityFilter(e.target.value)}
+              >
+                <option value="all">Sve aktivnosti</option>
+                <option value="active24h">Aktivni 24h</option>
+                <option value="active7d">Aktivni 7d</option>
+                <option value="inactive7d">Neaktivni &gt; 7d</option>
+                <option value="inactive30d">Neaktivni &gt; 30d</option>
+              </select>
+              <input
+                type="date"
+                className="small-input"
+                value={registrationFrom}
+                onChange={(e) => setRegistrationFrom(e.target.value)}
+                title="Registrirano od"
+              />
+              <input
+                type="date"
+                className="small-input"
+                value={registrationTo}
+                onChange={(e) => setRegistrationTo(e.target.value)}
+                title="Registrirano do"
+              />
               {selectedDevice && (
                 <button
                   type="button"
@@ -1296,6 +1743,8 @@ function App() {
                     <th>IP Adresa</th>
                     <th>MAC Adresa</th>
                     <th>Grupa</th>
+                    <th>Registracija</th>
+                    <th>Aktivnost</th>
                     <th>Napajanje</th>
                     <th>Status</th>
                     <th>Akcije</th>
@@ -1305,7 +1754,7 @@ function App() {
                 <tbody>
                   {filteredDevices.length === 0 ? (
                     <tr className="empty-row">
-                      <td colSpan={7}>
+                      <td colSpan={11}>
                         Nema uređaja za prikaz. Dodaj novi uređaj ili očisti pretragu.
                       </td>
                     </tr>
@@ -1324,6 +1773,8 @@ function App() {
                         <td>{device.ip}</td>
                         <td>{device.mac}</td>
                         <td>{device.groupName || "-"}</td>
+                        <td>{device.created_at ? new Date(device.created_at).toLocaleDateString() : "-"}</td>
+                        <td>{device.last_active_at ? new Date(device.last_active_at).toLocaleDateString() : "-"}</td>
                         <td>
                           <span
                             className={
@@ -1461,20 +1912,243 @@ function App() {
                     Restart uređaja
                   </button>
                 </div>
-                <div className="history-section">
-                  <h3>Posljednji zapisi</h3>
-                  <ul>
-                    {selectedDeviceHistory.length === 0 ? (
-                      <li>Nema zapisa za ovaj uređaj.</li>
-                    ) : (
-                      selectedDeviceHistory.map((entry, index) => (
-                        <li key={`${selectedDevice.id}-${index}`}>
-                          <strong>{entry.timestamp}</strong> - {entry.status} - {entry.note}
-                        </li>
-                      ))
-                    )}
-                  </ul>
+                <div className="detail-tabs">
+                  <button
+                    type="button"
+                    className={detailTab === "info" ? "tab-btn active" : "tab-btn"}
+                    onClick={() => setDetailTab("info")}
+                  >
+                    Informacije
+                  </button>
+                  <button
+                    type="button"
+                    className={detailTab === "schedule" ? "tab-btn active" : "tab-btn"}
+                    onClick={() => setDetailTab("schedule")}
+                  >
+                    Raspored
+                  </button>
                 </div>
+                {detailTab === "info" ? (
+                  <div className="history-section">
+                    <h3>Posljednji zapisi</h3>
+                    <ul>
+                      {selectedDeviceHistory.length === 0 ? (
+                        <li>Nema zapisa za ovaj uređaj.</li>
+                      ) : (
+                        selectedDeviceHistory.map((entry, index) => (
+                          <li key={`${selectedDevice.id}-${index}`}>
+                            <strong>{entry.timestamp}</strong> - {entry.status} - {entry.note}
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="schedule-panel">
+                    <h3>Raspored za {selectedDevice.name}</h3>
+                    <p className="form-description">
+                      Dodaj cron stil rasporede za uključivanje, gašenje, otvaranje aplikacije ili mutiranje zvuka.
+                    </p>
+                    <div className="schedule-list">
+                      {getDeviceSchedules(selectedDevice.id).length === 0 ? (
+                        <div className="empty-log">Nema spremljenih rasporeda.</div>
+                      ) : (
+                        <div className="schedule-table">
+                          {getDeviceSchedules(selectedDevice.id).map((schedule) => (
+                            <div key={schedule.id} className="schedule-row">
+                              <div>
+                                <strong>{schedule.cron}</strong>
+                                <div>{getActionLabel(schedule.action)}</div>
+                                {schedule.description && <div className="schedule-note">{schedule.description}</div>}
+                              </div>
+                              <div className="schedule-row-actions">
+                                <button
+                                  type="button"
+                                  className={schedule.enabled ? "action-btn poweron-btn" : "action-btn"}
+                                  onClick={() => handleToggleSchedule(schedule)}
+                                >
+                                  {schedule.enabled ? "On" : "Off"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn"
+                                  onClick={() => fetchScheduleLogs(schedule)}
+                                >
+                                  Logovi
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn"
+                                  onClick={() => handleTriggerSchedule(schedule)}
+                                >
+                                  Pokreni
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn settings-btn"
+                                  onClick={() => handleEditSchedule(schedule)}
+                                >
+                                  Uredi
+                                </button>
+                                <button
+                                  type="button"
+                                  className="action-btn delete-selected-btn"
+                                  onClick={() => handleDeleteSchedule(schedule.id)}
+                                >
+                                  Obriši
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="schedule-form">
+                      <h3>{editingScheduleId ? "Uredi raspored" : "Dodaj novi raspored"}</h3>
+                      <label>Cron izraz</label>
+                      <input
+                        value={scheduleCron}
+                        onChange={(e) => setScheduleCron(e.target.value)}
+                        placeholder="npr. 0 7 * * *"
+                      />
+                      {!cronValid && (
+                        <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja: minuta sat danMjesec mjesec danTjedan.</div>
+                      )}
+                      <label>Akcija</label>
+                      <select
+                        value={scheduleAction}
+                        onChange={(e) => setScheduleAction(e.target.value)}
+                      >
+                        {getAvailableActions(selectedDevice).map((action) => (
+                          <option key={action.value} value={action.value}>
+                            {action.label}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedDevice && (
+                        <div className="form-description">
+                          Automatski otkrivene podržane akcije za {selectedDevice.brand}:
+                          {getAvailableActions(selectedDevice)
+                            .map((action) => action.label)
+                            .join(", ")}
+                        </div>
+                      )}
+                      {(scheduleAction === "launchApp" || scheduleAction === "setVolume") && (
+                        <input
+                          value={scheduleTarget}
+                          onChange={(e) => setScheduleTarget(e.target.value)}
+                          placeholder={
+                            scheduleAction === "launchApp"
+                              ? "App ID ili URL za otvaranje"
+                              : "Volumen 0-100"
+                          }
+                        />
+                      )}
+
+                      <div className="sequence-editor">
+                        <h4>Sekvenca akcija (opcionalno)</h4>
+                        <div className="sequence-add-row">
+                          <select value={currentStepAction} onChange={(e) => setCurrentStepAction(e.target.value)}>
+                            {getAvailableActions(selectedDevice).map((action) => (
+                              <option key={action.value} value={action.value}>
+                                {action.label}
+                              </option>
+                            ))}
+                          </select>
+                          {(currentStepAction === "launchApp" || currentStepAction === "setVolume") && (
+                            <input
+                              value={currentStepParam}
+                              onChange={(e) => setCurrentStepParam(e.target.value)}
+                              placeholder={currentStepAction === "launchApp" ? "App ID ili URL" : "Volumen 0-100"}
+                            />
+                          )}
+                          <input
+                            value={currentStepDelay}
+                            onChange={(e) => setCurrentStepDelay(e.target.value)}
+                            placeholder="delay ms (npr. 5000)"
+                          />
+                          {currentStepAction === "poweron" && (
+                            <>
+                              <input
+                                value={currentStepWaitForReady}
+                                onChange={(e) => setCurrentStepWaitForReady(e.target.value)}
+                                placeholder="waitForReadyMs (ms, default 30000)"
+                              />
+                              <input
+                                value={currentStepSettle}
+                                onChange={(e) => setCurrentStepSettle(e.target.value)}
+                                placeholder="settleMs (ms, npr. 2000)"
+                              />
+                            </>
+                          )}
+                          <button type="button" className="action-btn" onClick={addStepToSequence}>Dodaj u sekvencu</button>
+                        </div>
+
+                        {scheduleSequence.length > 0 && (
+                          <div className="sequence-list">
+                            {scheduleSequence.map((step, idx) => (
+                              <div
+                                key={idx}
+                                className={`sequence-step ${dragIndex === idx ? 'dragging' : ''}`}
+                                draggable
+                                onDragStart={(e) => onDragStart(e, idx)}
+                                onDragOver={(e) => onDragOver(e)}
+                                onDrop={(e) => onDrop(e, idx)}
+                              >
+                                <div>
+                                  <strong>{getActionLabel(step.action)}</strong>
+                                  {step.params?.target && <div className="muted">{step.params.target}</div>}
+                                  {typeof step.params?.volume === 'number' && <div className="muted">Volumen: {step.params.volume}</div>}
+                                  {step.delayMs && <div className="muted">Delay: {step.delayMs} ms</div>}
+                                  {step.waitForReadyMs && <div className="muted">WaitReady: {step.waitForReadyMs} ms</div>}
+                                  {step.settleMs && <div className="muted">Settle: {step.settleMs} ms</div>}
+                                </div>
+                                <div className="sequence-step-actions">
+                                  <button type="button" onClick={() => removeStep(idx)}>✕</button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <label>Opis</label>
+                      <input
+                        value={scheduleDescription}
+                        onChange={(e) => setScheduleDescription(e.target.value)}
+                        placeholder="Opis rasporeda"
+                      />
+                      <div className="schedule-form-row">
+                        <label className="schedule-enable-label">
+                          <input
+                            type="checkbox"
+                            checked={scheduleEnabled}
+                            onChange={(e) => setScheduleEnabled(e.target.checked)}
+                          />
+                          Omogući raspored
+                        </label>
+                        <div className="schedule-buttons">
+                          <button
+                            type="button"
+                            className="save-btn"
+                            onClick={handleSaveSchedule}
+                            disabled={
+                              !cronValid ||
+                              (scheduleAction === "launchApp" && !scheduleTarget.trim()) ||
+                              (scheduleAction === "setVolume" &&
+                                (scheduleTarget.trim() === "" || Number.isNaN(Number(scheduleTarget)) || Number(scheduleTarget) < 0 || Number(scheduleTarget) > 100))
+                            }
+                          >
+                            Spremi
+                          </button>
+                          <button type="button" className="action-btn" onClick={clearScheduleForm}>
+                            Očisti
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>
