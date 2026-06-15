@@ -791,7 +791,7 @@ button:disabled {
 }
 
 .chart-bar.online {
-  background: linear-gradient(90deg, #818cf8, #6366f1);
+  background: linear-gradient(90deg, #22c55e, #16a34a);
 }
 
 .chart-bar.offline {
@@ -863,7 +863,7 @@ button:disabled {
 }
 
 .pie-legend-dot.online {
-  background: #818cf8;
+  background: #22c55e;
 }
 
 .pie-legend-dot.offline {

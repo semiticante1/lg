@@ -1474,7 +1474,7 @@ function App() {
                   <div
                     className="pie-chart-donut"
                     style={{
-                      background: `conic-gradient(#818cf8 ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg, #f59e0b ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg 360deg)`,
+                      background: `conic-gradient(#22c55e ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg, #f59e0b ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg 360deg)`,
                     }}
                   >
                     <div className="donut-center">
