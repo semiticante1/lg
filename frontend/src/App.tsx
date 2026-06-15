@@ -1313,7 +1313,7 @@ function App() {
       }))
     )
     .sort((a, b) => b.time - a.time)
-    .slice(0, 8);
+    .slice(0, 4);
 
   const groupStatusSummary = groups.map((group) => {
     const members = devices.filter((device) => device.groupId === group.id);
@@ -1802,7 +1802,7 @@ function App() {
             <div className="activity-feed-card">
               <h2>Aktivnosti uređaja</h2>
               <p className="form-description">
-                Prati posljednjih 8 automatskih i manuelnih događaja za uređaje.
+                Prati posljednjih 4 automatskih i manuelnih događaja za uređaje.
               </p>
               {recentDeviceEvents.length === 0 ? (
                 <p className="empty-log">Nema zabilježenih aktivnosti još.</p>

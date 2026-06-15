@@ -992,7 +992,7 @@ button:disabled {
 .device-table {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0 10px;
+  border-spacing: 0 6px;
   background: transparent;
 }
 
@@ -1003,8 +1003,9 @@ button:disabled {
 .device-table th,
 .device-table td {
   text-align: left;
-  padding: 16px 14px;
+  padding: 12px 12px;
   color: var(--text-muted);
+  font-size: 0.9rem;
 }
 
 .device-table th {
@@ -1100,6 +1101,8 @@ button:disabled {
   border-radius: 999px;
   font-size: 0.95rem;
   font-weight: 600;
+  white-space: nowrap;
+  flex-wrap: nowrap;
 }
 
 .status-online {
