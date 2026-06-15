@@ -59,6 +59,25 @@ const getAsync = (sql, params = []) =>
     });
   });
 
+// WebSocket server will be initialized after HTTP server starts
+let wss = null;
+
+const broadcastDeviceState = async (deviceId) => {
+  try {
+    if (!wss) return;
+    const device = await getAsync(`SELECT * FROM devices WHERE id = ?`, [deviceId]);
+    if (!device) return;
+    const payload = JSON.stringify({ type: 'device:update', device });
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        try { client.send(payload); } catch (e) {}
+      }
+    });
+  } catch (e) {
+    console.error('broadcastDeviceState error:', e);
+  }
+};
+
 async function initDatabase() {
   await runAsync("PRAGMA foreign_keys = ON");
 
@@ -370,7 +389,7 @@ const executeScheduleAction = async (scheduleId) => {
           case "poweron":
             await powerOnDevice(device);
             await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-
+                  try { await broadcastDeviceState(device.id); } catch (e) {}
             // wait for the device to report as 'On' before proceeding to next step
             // step.waitForReadyMs can override the default max wait (ms)
             const maxWaitMs = Number(step.waitForReadyMs || 30000);
@@ -397,10 +416,12 @@ const executeScheduleAction = async (scheduleId) => {
           case "poweroff":
             await powerOffDevice(device);
             await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
+            try { await broadcastDeviceState(device.id); } catch (e) {}
             break;
           case "restart":
             await wakeDevice(device.mac);
             await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+            try { await broadcastDeviceState(device.id); } catch (e) {}
             break;
           case "launchApp":
             await launchWebosApp(device.ip, params.target || params.appId || params.uri);
@@ -451,14 +472,17 @@ const executeScheduleAction = async (scheduleId) => {
     case "poweron":
       await powerOnDevice(device);
       await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+      try { await broadcastDeviceState(device.id); } catch (e) {}
       break;
     case "poweroff":
       await powerOffDevice(device);
       await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
+      try { await broadcastDeviceState(device.id); } catch (e) {}
       break;
     case "restart":
       await wakeDevice(device.mac);
       await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+      try { await broadcastDeviceState(device.id); } catch (e) {}
       break;
     case "launchApp":
       await launchWebosApp(device.ip, actionParams.target || actionParams.appId || actionParams.uri);
@@ -637,6 +661,7 @@ app.post("/devices/:id/poweroff", async (req, res) => {
     const newState = success ? "Off" : device.power_state || device.powerState || "Off";
 
     await runAsync(`UPDATE devices SET power_state = ? WHERE id = ?`, [newState, device.id]);
+    try { await broadcastDeviceState(device.id); } catch (e) {}
 
     console.log(`Power off requested for ${device.name} (${device.ip}) brand=${device.brand} success=${success}`);
 
@@ -833,6 +858,7 @@ app.post("/devices/:id/poweron", async (req, res) => {
 
     if (success) {
       await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+      try { await broadcastDeviceState(device.id); } catch (e) {}
     }
 
     console.log(`Power on requested for ${device.name} (${device.ip}) brand=${device.brand}`);
@@ -846,6 +872,69 @@ app.post("/devices/:id/poweron", async (req, res) => {
     res.status(500).json({
       error: error.message,
     });
+  }
+});
+
+app.post("/devices/:id/action", async (req, res) => {
+  try {
+    const { action, action_params } = req.body;
+    const device = await getAsync("SELECT * FROM devices WHERE id = ?", [req.params.id]);
+    if (!device) {
+      return res.status(404).json({ error: "Device not found" });
+    }
+    if (!action || typeof action !== "string") {
+      return res.status(400).json({ error: "Action is required." });
+    }
+
+    const params = action_params || {};
+    switch (action) {
+      case "poweron":
+        await powerOnDevice(device);
+        await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+        try { await broadcastDeviceState(device.id); } catch (e) {}
+        break;
+      case "poweroff":
+        await powerOffDevice(device);
+        await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
+        try { await broadcastDeviceState(device.id); } catch (e) {}
+        break;
+      case "restart":
+        await wakeDevice(device.mac);
+        await runAsync(`UPDATE devices SET status = 'Online', power_state = 'On' WHERE id = ?`, [device.id]);
+        try { await broadcastDeviceState(device.id); } catch (e) {}
+        break;
+      case "launchApp":
+        if (!params.target) {
+          return res.status(400).json({ error: "launchApp action requires target." });
+        }
+        await launchWebosApp(device.ip, params.target);
+        break;
+      case "mute":
+        await setWebosMute(device.ip, true);
+        break;
+      case "unmute":
+        await setWebosMute(device.ip, false);
+        break;
+      case "volumeUp":
+        await adjustWebosVolume(device.ip, "Up");
+        break;
+      case "volumeDown":
+        await adjustWebosVolume(device.ip, "Down");
+        break;
+      case "setVolume":
+        if (typeof params.volume !== "number") {
+          return res.status(400).json({ error: "setVolume action requires numeric volume." });
+        }
+        await setWebosVolume(device.ip, params.volume);
+        break;
+      default:
+        return res.status(400).json({ error: `Unknown action: ${action}` });
+    }
+
+    res.json({ success: true, action, device: device.name });
+  } catch (error) {
+    console.error("Device action failed:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1134,8 +1223,20 @@ initDatabase()
     } catch (e) {
       // ignore
     }
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`🚀 Backend radi na http://localhost:${PORT}`);
+    });
+
+    // Initialize WebSocket server for pushing device updates to clients
+    wss = new WebSocket.Server({ server });
+    wss.on('connection', async (socket) => {
+      try {
+        console.log('WebSocket client connected');
+        const devices = await allAsync(`SELECT * FROM devices`);
+        socket.send(JSON.stringify({ type: 'devices:init', devices }));
+      } catch (e) {
+        // ignore send errors
+      }
     });
   })
   .catch((error) => {

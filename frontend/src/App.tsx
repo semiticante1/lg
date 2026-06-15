@@ -57,6 +57,8 @@ function App() {
   const [deviceSchedules, setDeviceSchedules] = useState<Record<number, DeviceSchedule[]>>({});
   const [scheduleCron, setScheduleCron] = useState("0 7 * * *");
   const [scheduleAction, setScheduleAction] = useState("poweron");
+  const [scheduleUseTime, setScheduleUseTime] = useState(false);
+  const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleTarget, setScheduleTarget] = useState("");
   const [scheduleDescription, setScheduleDescription] = useState("");
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
@@ -107,6 +109,17 @@ function App() {
     window.localStorage.setItem("appTheme", theme);
   }, [theme]);
 
+  // Keep theme class on body so CSS variables apply globally (body uses --body-bg)
+  useEffect(() => {
+    try {
+      document.body.classList.remove('theme-light', 'theme-dark');
+      document.body.classList.add(`theme-${theme}`);
+    } catch (e) {}
+    return () => {
+      try { document.body.classList.remove('theme-light', 'theme-dark'); } catch (e) {}
+    };
+  }, [theme]);
+
   const toggleTheme = () => {
     setTheme((current) => (current === "light" ? "dark" : "light"));
   };
@@ -126,6 +139,40 @@ function App() {
     }, 20000);
 
     return () => clearInterval(interval);
+  }, [baseUrl]);
+
+  // WebSocket client to receive immediate device state updates from backend
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    try {
+      const wsUrl = baseUrl.replace(/^http/, 'ws');
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        console.log('WS connected to', wsUrl);
+      };
+      ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.type === 'device:update' && msg.device) {
+            const dev = msg.device;
+            setDevices((prev) => prev.map((d) => (d.id === dev.id ? { ...d, ...dev, powerState: dev.power_state || dev.powerState } : d)));
+            recordDeviceEvent({ ...(devices.find((x) => x.id === dev.id) || dev), powerState: dev.power_state || dev.powerState }, 'State updated from server');
+          } else if (msg.type === 'devices:init' && Array.isArray(msg.devices)) {
+            setDevices(msg.devices.map((d: any) => ({ ...d, powerState: d.power_state || d.powerState || 'Off' })));
+          }
+        } catch (e) {
+          console.error('WS message parse error', e);
+        }
+      };
+      ws.onclose = () => console.log('WS closed');
+      ws.onerror = (e) => console.error('WS error', e);
+    } catch (e) {
+      console.error('WS init failed', e);
+    }
+
+    return () => {
+      try { ws?.close(); } catch (e) {}
+    };
   }, [baseUrl]);
 
   const refreshAll = async () => {
@@ -218,6 +265,8 @@ function App() {
     setScheduleEnabled(true);
     setEditingScheduleId(null);
     setScheduleSequence([]);
+    setScheduleUseTime(false);
+    setScheduleTime("");
   };
 
   const normalizeCronExpression = (expression: string) => {
@@ -307,6 +356,18 @@ function App() {
     } catch (e) {
       setScheduleSequence([]);
     }
+    // detect simple HH:MM cron form like "MM HH * * *" and present friendly time
+    try {
+      const parts = schedule.cron ? schedule.cron.trim().split(/\s+/) : [];
+      if (parts.length >= 5 && parts[2] === "*" && parts[3] === "*" && parts[4] === "*") {
+        const minute = parts[0];
+        const hour = parts[1];
+        if (/^\d{1,2}$/.test(minute) && /^\d{1,2}$/.test(hour)) {
+          setScheduleUseTime(true);
+          setScheduleTime(`${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`);
+        }
+      }
+    } catch (e) {}
   };
 
   const handleSaveSchedule = async () => {
@@ -315,13 +376,15 @@ function App() {
       return;
     }
 
-    if (!scheduleCron.trim()) {
-      showMessage("Greška", "Unesi cron izraz.");
+    // determine cron expression: prefer friendly time if selected
+    const cronInput = scheduleUseTime && scheduleTime ? scheduleTime.trim() : scheduleCron.trim();
+    if (!cronInput) {
+      showMessage("Greška", "Unesi cron izraz ili vrijeme HH:MM.");
       return;
     }
 
-    const normalizedCron = normalizeCronExpression(scheduleCron.trim());
-    if (!normalizedCron || !isCronValid(scheduleCron.trim())) {
+    const normalizedCron = normalizeCronExpression(cronInput);
+    if (!normalizedCron || !isCronValid(cronInput)) {
       showMessage("Greška", "Cron izraz nije valjan. Koristi format s 5 polja poput: 0 7 * * * ili vrijeme HH:MM.");
       return;
     }
@@ -729,6 +792,17 @@ function App() {
   };
 
   const handlePowerOffDevice = async (id: number) => {
+    // Optimistic UI update: mark device as Off immediately
+    const device = devices.find((d) => d.id === id);
+    if (device) {
+      setDevices((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, powerState: "Off", power_state: "Off" } : d))
+      );
+      recordDeviceEvent({ ...device, powerState: "Off" }, "Manual power off requested");
+      setStatusMessage("Zahtjev za gašenje poslan (status ažuriran lokalno).");
+      setTimeout(() => setStatusMessage(""), 3000);
+    }
+
     try {
       const response = await fetch(`${baseUrl}/devices/${id}/poweroff`, {
         method: "POST",
@@ -741,20 +815,34 @@ function App() {
           "Greška",
           `Nije uspjelo gašenje uređaja: ${errorData?.error || response.statusText}`
         );
+        // Re-sync from server to ensure correct state
+        await refreshAll();
         return;
       }
 
       const data = await response.json();
-      setStatusMessage(`Zahtjev za gašenje poslan: ${data.device || "uređaj"}.`);
-      setTimeout(() => setStatusMessage(""), 4000);
+      // backend accepted the request; final sync
       await refreshAll();
     } catch (error) {
       console.error("Greska pri gašenju uređaja:", error);
       showMessage("Greška", "Greška pri gašenju uređaja.");
+      // On error, reload device states
+      await refreshAll();
     }
   };
 
   const handlePowerOnDevice = async (id: number) => {
+    // Optimistic UI update: mark device as On immediately
+    const device = devices.find((d) => d.id === id);
+    if (device) {
+      setDevices((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, powerState: "On", power_state: "On" } : d))
+      );
+      recordDeviceEvent({ ...device, powerState: "On" }, "Manual power on requested");
+      setStatusMessage("Zahtjev za paljenje poslan (status ažuriran lokalno).");
+      setTimeout(() => setStatusMessage(""), 3000);
+    }
+
     try {
       const response = await fetch(`${baseUrl}/devices/${id}/poweron`, {
         method: "POST",
@@ -767,16 +855,16 @@ function App() {
           "Greška",
           `Nije uspjelo paljenje uređaja: ${errorData?.error || response.statusText}`
         );
+        await refreshAll();
         return;
       }
 
       const data = await response.json();
-      setStatusMessage(`Zahtjev za paljenje poslan: ${data.device || "uređaj"}.`);
-      setTimeout(() => setStatusMessage(""), 4000);
       await refreshAll();
     } catch (error) {
       console.error("Greska pri paljenju uređaja:", error);
       showMessage("Greška", "Greška pri paljenju uređaja.");
+      await refreshAll();
     }
   };
 
@@ -803,6 +891,34 @@ function App() {
     } catch (error) {
       console.error("Greska pri restartu uređaja:", error);
       showMessage("Greška", "Greška pri restartu uređaja.");
+    }
+  };
+
+  const handleSendDeviceAction = async (id: number, action: string) => {
+    if (!id || !action) return;
+    try {
+      const device = devices.find((d) => d.id === id);
+      if (!device) {
+        showMessage("Greška", "Uređaj nije pronađen.");
+        return;
+      }
+      const response = await fetch(`${baseUrl}/devices/${id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          action_params: {},
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        showMessage("Greška", errorData?.error || "Nije moguće poslati akciju uređaju.");
+        return;
+      }
+      showMessage("Info", `Akcija ${action} poslana.`);
+    } catch (error) {
+      console.error("Greška pri slanju akcije uređaju:", error);
+      showMessage("Greška", "Akcija uređaju nije uspjela.");
     }
   };
 
@@ -845,8 +961,46 @@ function App() {
     }
   };
 
+  // View modal state
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewModalDevice, setViewModalDevice] = useState<Device | null>(null);
+
+  const closeViewModal = () => {
+    setShowViewModal(false);
+    setViewModalDevice(null);
+    setSelectedDeviceId(null);
+    setDetailTab("info");
+  };
+
+  // Dropdown state for per-row actions
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
+
+  const toggleDropdown = (id: number) => {
+    setOpenDropdownId((current) => (current === id ? null : id));
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest('.action-dropdown-wrapper')) {
+        setOpenDropdownId(null);
+      }
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, []);
+
   const handleViewDevice = async (id: number) => {
-    setSelectedDeviceId(id);
+    const dev = devices.find((d) => d.id === id) || null;
+    if (dev) {
+      setViewModalDevice(dev);
+      setSelectedDeviceId(id);
+      setDetailTab("schedule");
+      setShowViewModal(true);
+      setOpenDropdownId(null);
+    }
   };
 
   const handleClearSelection = () => {
@@ -1148,6 +1302,7 @@ function App() {
   const selectedDeviceHistory = selectedDevice
     ? deviceHistory[selectedDevice.id] || []
     : [];
+  const viewModalDeviceInfo = viewModalDevice || selectedDevice;
 
   const recentDeviceEvents = Object.entries(deviceHistory)
     .flatMap(([deviceId, entries]) =>
@@ -1518,7 +1673,7 @@ function App() {
           <>
             <div className="top-bar">
               <div>
-                <h1 style={{ color: "white" }}>Uređaji</h1>
+                <h1 style={{ color: "green" }}>Uređaji</h1>
                 <p className="page-description">
                   Pronađi uređaje brzo, upravljaj grupama i primjeni postavke u nekoliko klikova.
                 </p>
@@ -1743,9 +1898,6 @@ function App() {
               <button type="button" className="action-btn restart-btn" onClick={handleRestartSelected}>
                 Restart označenih
               </button>
-              <button type="button" className="action-btn settings-btn" onClick={handleApplySettings}>
-                Pošalji postavke
-              </button>
               <button type="button" className="action-btn delete-selected-btn" onClick={handleDeleteSelected}>
                 Obriši odabrane
               </button>
@@ -1822,27 +1974,6 @@ function App() {
                           <div className="action-buttons-row">
                             <button
                               type="button"
-                              className="view-btn"
-                              onClick={() => handleViewDevice(device.id)}
-                            >
-                              Pogledaj
-                            </button>
-                            <button
-                              type="button"
-                              className="edit-btn"
-                              onClick={() => {
-                                setEditingId(device.id);
-                                setDeviceName(device.name);
-                                setDeviceIp(device.ip);
-                                setDeviceMac(device.mac);
-                                setModalGroupId(device.groupId ?? null);
-                                setShowModal(true);
-                              }}
-                            >
-                              Uredi
-                            </button>
-                            <button
-                              type="button"
                               className="poweron-btn"
                               onClick={() => handlePowerOnDevice(device.id)}
                             >
@@ -1855,23 +1986,32 @@ function App() {
                             >
                               Isključi
                             </button>
-                            <button
-                              type="button"
-                              className="action-btn restart-btn"
-                              onClick={() => handleRestartDevice(device.id)}
-                            >
-                              Restart
-                            </button>
-                            <button
-                              type="button"
-                              className="delete-btn"
-                              onClick={() => {
-                                setPendingDelete(device.id);
-                                setShowDeleteConfirm(true);
-                              }}
-                            >
-                              Obriši
-                            </button>
+
+                            <div className="action-dropdown-wrapper">
+                              <button
+                                type="button"
+                                className="action-menu-btn"
+                                onClick={() => toggleDropdown(device.id)}
+                              >
+                                Akcije ▾
+                              </button>
+                              {openDropdownId === device.id && (
+                                <div className="action-dropdown">
+                                  <button type="button" className="dropdown-item" onClick={() => handleViewDevice(device.id)}>Pogledaj</button>
+                                  <button type="button" className="dropdown-item" onClick={() => {
+                                    setEditingId(device.id);
+                                    setDeviceName(device.name);
+                                    setDeviceIp(device.ip);
+                                    setDeviceMac(device.mac);
+                                    setModalGroupId(device.groupId ?? null);
+                                    setShowModal(true);
+                                    setOpenDropdownId(null);
+                                  }}>Uredi</button>
+                                  <button type="button" className="dropdown-item" onClick={() => { handleRestartDevice(device.id); setOpenDropdownId(null); }}>Restart</button>
+                                  <button type="button" className="dropdown-item" onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); setOpenDropdownId(null); }}>Obriši</button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -1880,7 +2020,7 @@ function App() {
                 </tbody>
               </table>
             </div>
-            {selectedDevice && (
+            {selectedDevice && !showViewModal && (
               <div className="device-details-card">
                 <h2>Detalji uređaja</h2>
                 <p className="form-description">
@@ -2028,13 +2168,24 @@ function App() {
                     <div className="schedule-form">
                       <h3>{editingScheduleId ? "Uredi raspored" : "Dodaj novi raspored"}</h3>
                       <label>Cron izraz</label>
-                      <input
-                        value={scheduleCron}
-                        onChange={(e) => setScheduleCron(e.target.value)}
-                        placeholder="npr. 0 7 * * * ili 07:00"
-                      />
+                        <input
+                          value={scheduleCron}
+                          onChange={(e) => setScheduleCron(e.target.value)}
+                          placeholder="npr. 0 7 * * * ili 07:00"
+                        />
+                        <div style={{display: 'flex', gap: 10, alignItems: 'center', marginTop: 8}}>
+                          <label style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                            <input type="checkbox" checked={scheduleUseTime} onChange={(e) => setScheduleUseTime(e.target.checked)} /> Koristi vrijeme (HH:MM)
+                          </label>
+                          {scheduleUseTime && (
+                            <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
+                          )}
+                        </div>
+                        {scheduleUseTime && (
+                          <div className="form-description">Vrijeme će biti automatski pretvoreno u cron stil (svakodnevno).</div>
+                        )}
                       <div className="schedule-help">
-                        Unesi cron izraz s 5 polja ili jednostavno vrijeme u formatu <strong>HH:MM</strong> za svakodnevni raspored.
+                        Unesi cron izraz s 5 polja ili jednostavno vrijeme u formatu <strong>HH:MM</strong> za svakodnevni raspored. Možeš također odabrati "Koristi vrijeme (HH:MM)" kako bi unos bio prijateljskiji — to će se automatski pretvoriti u cron.
                       </div>
                       {!cronValid && (
                         <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja ili vrijeme HH:MM poput 07:00.</div>
@@ -2173,6 +2324,221 @@ function App() {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+            {showViewModal && viewModalDeviceInfo && (
+              <div className="modal-overlay">
+                <div className="modal">
+                  <div className="modal-header">
+                    <div>
+                      <h2>Detalji: {viewModalDeviceInfo.name}</h2>
+                      <p className="form-description">Brzi pregled uređaja i njegovi rasporedi.</p>
+                    </div>
+                    <button type="button" className="close-btn" onClick={closeViewModal}>✕</button>
+                  </div>
+
+                  <div className="device-meta">
+                    <div className="detail-row">
+                      <span>IP adresa:</span>
+                      <strong>{viewModalDeviceInfo.ip}</strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>MAC adresa:</span>
+                      <strong>{viewModalDeviceInfo.mac}</strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>Marka:</span>
+                      <strong>{viewModalDeviceInfo.brand || "generic"}</strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>Status:</span>
+                      <strong>{formatStatusText(viewModalDeviceInfo.status)}</strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>Napajanje:</span>
+                      <strong>{formatPowerText(viewModalDeviceInfo.powerState)}</strong>
+                    </div>
+                    <div className="detail-row">
+                      <span>Grupa:</span>
+                      <strong>{viewModalDeviceInfo.groupName || "Bez grupe"}</strong>
+                    </div>
+                  </div>
+
+                  <div className="detail-actions">
+                    <button type="button" className="action-btn poweron-btn" onClick={() => handlePowerOnDevice(viewModalDeviceInfo.id)}>
+                      Uključi
+                    </button>
+                    <button type="button" className="action-btn poweroff-btn" onClick={() => handlePowerOffDevice(viewModalDeviceInfo.id)}>
+                      Isključi
+                    </button>
+                    <button type="button" className="action-btn restart-btn" onClick={() => handleRestartDevice(viewModalDeviceInfo.id)}>
+                      Restart
+                    </button>
+                    {viewModalDeviceInfo.brand?.toLowerCase() === "webos" && (
+                      <>
+                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "mute"); }}>
+                          Mute
+                        </button>
+                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "unmute"); }}>
+                          Unmute
+                        </button>
+                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeUp"); }}>
+                          + Volume
+                        </button>
+                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeDown"); }}>
+                          - Volume
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="detail-tabs">
+                    <button
+                      type="button"
+                      className={detailTab === "info" ? "tab-btn active" : "tab-btn"}
+                      onClick={() => setDetailTab("info")}
+                    >
+                      Informacije
+                    </button>
+                    <button
+                      type="button"
+                      className={detailTab === "schedule" ? "tab-btn active" : "tab-btn"}
+                      onClick={() => setDetailTab("schedule")}
+                    >
+                      Rasporedi
+                    </button>
+                  </div>
+
+                  {detailTab === "info" ? (
+                    <div className="history-section">
+                      <h3>Posljednji zapisi</h3>
+                      <ul>
+                        {selectedDeviceHistory.length === 0 ? (
+                          <li>Nema zapisa za ovaj uređaj.</li>
+                        ) : (
+                          selectedDeviceHistory.map((entry, index) => (
+                            <li key={`${viewModalDeviceInfo.id}-${index}`}>
+                              <strong>{entry.timestamp}</strong> - {entry.status} - {entry.note}
+                            </li>
+                          ))
+                        )}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="schedule-panel">
+                      <h3>Rasporedi za {viewModalDeviceInfo.name}</h3>
+                      <p className="form-description">
+                        Pregledaj i upravljaj spremljenim rasporedima, uključujući akcije poput power, mute i otvaranje aplikacija.
+                      </p>
+                      <div className="schedule-list">
+                        {getDeviceSchedules(viewModalDeviceInfo.id).length === 0 ? (
+                          <div className="empty-log">Nema spremljenih rasporeda.</div>
+                        ) : (
+                          <div className="schedule-table">
+                            {getDeviceSchedules(viewModalDeviceInfo.id).map((schedule) => (
+                              <div key={schedule.id} className="schedule-row">
+                                <div>
+                                  <strong>{schedule.cron}</strong>
+                                  <div>{getActionLabel(schedule.action)}</div>
+                                  {schedule.description && <div className="schedule-note">{schedule.description}</div>}
+                                </div>
+                                <div className="schedule-row-actions">
+                                  <button
+                                    type="button"
+                                    className={schedule.enabled ? "action-btn poweron-btn" : "action-btn"}
+                                    onClick={() => handleToggleSchedule(schedule)}
+                                  >
+                                    {schedule.enabled ? "On" : "Off"}
+                                  </button>
+                                  <button type="button" className="action-btn" onClick={() => fetchScheduleLogs(schedule)}>
+                                    Logovi
+                                  </button>
+                                  <button type="button" className="action-btn" onClick={() => handleTriggerSchedule(schedule)}>
+                                    Pokreni
+                                  </button>
+                                  <button type="button" className="action-btn settings-btn" onClick={() => handleEditSchedule(schedule)}>
+                                    Uredi
+                                  </button>
+                                  <button type="button" className="action-btn delete-selected-btn" onClick={() => handleDeleteSchedule(schedule.id)}>
+                                    Obriši
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="schedule-form">
+                        <h3>{editingScheduleId ? "Uredi raspored" : "Dodaj novi raspored"}</h3>
+                        <label>Cron izraz</label>
+                        <input
+                          value={scheduleCron}
+                          onChange={(e) => setScheduleCron(e.target.value)}
+                          placeholder="npr. 0 7 * * * ili 07:00"
+                        />
+                        <div className="schedule-help">
+                          Unesi cron izraz s 5 polja ili vrijeme <strong>HH:MM</strong>.
+                        </div>
+                        {!cronValid && (
+                          <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja ili vrijeme HH:MM poput 07:00.</div>
+                        )}
+                        <label>Akcija</label>
+                        <select value={scheduleAction} onChange={(e) => setScheduleAction(e.target.value)}>
+                          {getAvailableActions(viewModalDeviceInfo).map((action) => (
+                            <option key={action.value} value={action.value}>
+                              {action.label}
+                            </option>
+                          ))}
+                        </select>
+                        {viewModalDeviceInfo && (
+                          <div className="form-description">
+                            Podržane akcije: {getAvailableActions(viewModalDeviceInfo).map((action) => action.label).join(", ")}
+                          </div>
+                        )}
+                        {(scheduleAction === "launchApp" || scheduleAction === "setVolume") && (
+                          <input
+                            value={scheduleTarget}
+                            onChange={(e) => setScheduleTarget(e.target.value)}
+                            placeholder={
+                              scheduleAction === "launchApp"
+                                ? "App ID ili URL"
+                                : "Volumen 0-100"
+                            }
+                          />
+                        )}
+                        <div className="schedule-form-row">
+                          <label className="schedule-enable-label">
+                            <input
+                              type="checkbox"
+                              checked={scheduleEnabled}
+                              onChange={(e) => setScheduleEnabled(e.target.checked)}
+                            />
+                            Omogući raspored
+                          </label>
+                          <div className="schedule-buttons">
+                            <button
+                              type="button"
+                              className="save-btn"
+                              onClick={handleSaveSchedule}
+                              disabled={
+                                !cronValid ||
+                                (scheduleAction === "launchApp" && !scheduleTarget.trim()) ||
+                                (scheduleAction === "setVolume" &&
+                                  (scheduleTarget.trim() === "" || Number.isNaN(Number(scheduleTarget)) || Number(scheduleTarget) < 0 || Number(scheduleTarget) > 100))
+                              }
+                            >
+                              Spremi
+                            </button>
+                            <button type="button" className="action-btn" onClick={clearScheduleForm}>
+                              Očisti
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </>
