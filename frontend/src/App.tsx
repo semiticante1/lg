@@ -220,15 +220,35 @@ function App() {
     setScheduleSequence([]);
   };
 
-  const isCronValid = (expression: string) => {
-    const parts = expression.trim().split(/\s+/);
+  const normalizeCronExpression = (expression: string) => {
+    const trimmed = expression.trim();
+    const timePattern = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+    if (timePattern.test(trimmed)) {
+      const match = trimmed.match(timePattern);
+      if (!match) return null;
+      const [, hour, minute] = match;
+      return `${minute} ${hour} * * *`;
+    }
+
+    const parts = trimmed.split(/\s+/);
     if (parts.length < 5 || parts.length > 6) {
+      return null;
+    }
+
+    return trimmed;
+  };
+
+  const isCronValid = (expression: string) => {
+    const normalized = normalizeCronExpression(expression);
+    if (!normalized) {
       return false;
     }
 
-    const fieldPattern = /^([*]|[0-9]|[1-5]?[0-9]|[1-2]?[0-9]|[1-3]?[0-9]|[1-7]|[0-9]-[0-9]|[0-9](,\s*[0-9])*(\/[0-9]+)?|\*[\/][0-9]+|[0-9]+-[0-9]+(\/\d+)?)$/;
+    const parts = normalized.split(/\s+/);
+    const fieldPattern = /^([*]|[0-9]|[1-5]?[0-9]|[1-2]?[0-9]|[1-3]?[0-9]|[1-7]|[0-9]-[0-9]|[0-9](,\s*[0-9])*(\/\d+)?|\*[\/][0-9]+|[0-9]+-[0-9]+(\/\d+)?)$/;
     return parts.every((field) => fieldPattern.test(field) || field.includes("*") || field.includes("/") || field.includes(",") || field.includes("-"));
   };
+
 
   const getActionLabel = (action: string) => {
     switch (action) {
@@ -300,8 +320,9 @@ function App() {
       return;
     }
 
-    if (!isCronValid(scheduleCron.trim())) {
-      showMessage("Greška", "Cron izraz nije valjan. Koristi format s 5 polja poput: 0 7 * * *.");
+    const normalizedCron = normalizeCronExpression(scheduleCron.trim());
+    if (!normalizedCron || !isCronValid(scheduleCron.trim())) {
+      showMessage("Greška", "Cron izraz nije valjan. Koristi format s 5 polja poput: 0 7 * * * ili vrijeme HH:MM.");
       return;
     }
 
@@ -322,7 +343,7 @@ function App() {
     let payload: any;
     if (Array.isArray(scheduleSequence) && scheduleSequence.length > 0) {
       payload = {
-        cron: scheduleCron.trim(),
+        cron: normalizedCron,
         actions: scheduleSequence.map((s) => ({
           action: s.action,
           params: s.params || {},
@@ -335,7 +356,7 @@ function App() {
       };
     } else {
       payload = {
-        cron: scheduleCron.trim(),
+        cron: normalizedCron,
         action: scheduleAction,
         action_params:
           scheduleAction === "launchApp"
@@ -2010,10 +2031,13 @@ function App() {
                       <input
                         value={scheduleCron}
                         onChange={(e) => setScheduleCron(e.target.value)}
-                        placeholder="npr. 0 7 * * *"
+                        placeholder="npr. 0 7 * * * ili 07:00"
                       />
+                      <div className="schedule-help">
+                        Unesi cron izraz s 5 polja ili jednostavno vrijeme u formatu <strong>HH:MM</strong> za svakodnevni raspored.
+                      </div>
                       {!cronValid && (
-                        <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja: minuta sat danMjesec mjesec danTjedan.</div>
+                        <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja ili vrijeme HH:MM poput 07:00.</div>
                       )}
                       <label>Akcija</label>
                       <select
