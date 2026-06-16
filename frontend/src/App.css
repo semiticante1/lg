@@ -1040,7 +1040,8 @@ button:disabled {
 .action-buttons-row {
   display: flex;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
 .action-dropdown-wrapper {
@@ -1054,6 +1055,9 @@ button:disabled {
   background: var(--surface-soft);
   cursor: pointer;
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .action-dropdown {
@@ -1078,10 +1082,22 @@ button:disabled {
   padding: 8px 12px;
   cursor: pointer;
   color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .dropdown-item:hover {
   background: var(--surface-soft);
+}
+
+.button-icon,
+.dropdown-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
 }
 
 .edit-btn {

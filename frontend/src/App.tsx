@@ -1977,14 +1977,14 @@ function App() {
                               className="poweron-btn"
                               onClick={() => handlePowerOnDevice(device.id)}
                             >
-                              Uključi
+                              <span className="button-icon">🔌</span> Uključi
                             </button>
                             <button
                               type="button"
                               className="poweroff-btn"
                               onClick={() => handlePowerOffDevice(device.id)}
                             >
-                              Isključi
+                              <span className="button-icon">⏻</span> Isključi
                             </button>
 
                             <div className="action-dropdown-wrapper">
@@ -1997,7 +1997,7 @@ function App() {
                               </button>
                               {openDropdownId === device.id && (
                                 <div className="action-dropdown">
-                                  <button type="button" className="dropdown-item" onClick={() => handleViewDevice(device.id)}>Pogledaj</button>
+                                  <button type="button" className="dropdown-item" onClick={() => handleViewDevice(device.id)}><span className="dropdown-item-icon">👁️</span> Pogledaj</button>
                                   <button type="button" className="dropdown-item" onClick={() => {
                                     setEditingId(device.id);
                                     setDeviceName(device.name);
@@ -2006,9 +2006,9 @@ function App() {
                                     setModalGroupId(device.groupId ?? null);
                                     setShowModal(true);
                                     setOpenDropdownId(null);
-                                  }}>Uredi</button>
-                                  <button type="button" className="dropdown-item" onClick={() => { handleRestartDevice(device.id); setOpenDropdownId(null); }}>Restart</button>
-                                  <button type="button" className="dropdown-item" onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); setOpenDropdownId(null); }}>Obriši</button>
+                                  }}><span className="dropdown-item-icon">✏️</span> Uredi</button>
+                                  <button type="button" className="dropdown-item" onClick={() => { handleRestartDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🔄</span> Restart</button>
+                                  <button type="button" className="dropdown-item" onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🗑️</span> Obriši</button>
                                 </div>
                               )}
                             </div>
