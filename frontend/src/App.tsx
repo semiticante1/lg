@@ -80,7 +80,9 @@ function App() {
   const [backendUrl, setBackendUrl] = useState("http://localhost:5000");
   const [schedulerOn, setSchedulerOn] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
+  const [toastMessages, setToastMessages] = useState<Array<{id: string, type: 'info' | 'success' | 'error', title: string, message: string}>>([]);
   const [loading, setLoading] = useState(false);
+  const [tableLoading, setTableLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const initialLoadRef = useRef(false);
@@ -633,8 +635,17 @@ function App() {
   const isValidMac = (mac: string) =>
     /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(mac);
 
+  const showToast = (type: 'info' | 'success' | 'error', title: string, message: string) => {
+    const id = Date.now().toString();
+    setToastMessages((prev) => [...prev, { id, type, title, message }]);
+    setTimeout(() => {
+      setToastMessages((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
   const showMessage = (title: string, message: string) => {
-    setMessageModal({ title, message });
+    const type = title === "Greška" ? "error" : title === "Info" ? "info" : "success";
+    showToast(type, title, message);
   };
 
   const showConfirm = (
@@ -981,15 +992,31 @@ function App() {
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowModal(false);
+        setShowViewModal(false);
+        setShowDeleteConfirm(false);
+        setShowAssignGroupModal(false);
+        setMessageModal(null);
+        setOpenDropdownId(null);
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
       if (!target.closest('.action-dropdown-wrapper')) {
         setOpenDropdownId(null);
       }
     };
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
+
+    document.addEventListener('keydown', handleKeyPress);
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+      document.removeEventListener('click', handleClickOutside);
+    };
   }, []);
 
   const handleViewDevice = async (id: number) => {
@@ -1682,21 +1709,21 @@ function App() {
               <div className="top-bar-actions">
                 <div className="top-bar-group">
                   <button type="button" className="theme-toggle-btn" onClick={toggleTheme}>
-                    {theme === "light" ? "Dark mode 🌙" : "Light mode ☀️"}
+                    {theme === "light" ? "🌙 Dark mode" : "☀️ Light mode"}
                   </button>
-                  <button type="button" className="refresh-btn" onClick={refreshAll}>
-                    Osvježi
+                  <button type="button" className="refresh-btn" onClick={refreshAll} disabled={loading}>
+                    <span className="button-icon">🔄</span> Osvježi
                   </button>
                 </div>
                 <div className="top-bar-group">
                   <button type="button" className="action-btn poweron-btn" onClick={handlePowerOnAll}>
-                    Upali sve TV-e
+                    <span className="button-icon">🔌</span> Upali sve TV-e
                   </button>
                   <button type="button" className="action-btn poweroff-btn" onClick={handlePowerOffAll}>
-                    Isključi sve TV-e
+                    <span className="button-icon">⏻️</span> Isključi sve TV-e
                   </button>
                   <button type="button" className="add-btn" onClick={handleOpenModal}>
-                    + Dodaj uređaj
+                    <span className="button-icon">➕</span> Dodaj uređaj
                   </button>
                 </div>
               </div>
@@ -1896,17 +1923,33 @@ function App() {
 
             <div className="actions">
               <button type="button" className="action-btn restart-btn" onClick={handleRestartSelected}>
-                Restart označenih
+                <span className="button-icon">🔄</span> Restart označenih
               </button>
               <button type="button" className="action-btn delete-selected-btn" onClick={handleDeleteSelected}>
-                Obriši odabrane
+                <span className="button-icon">🗑️</span> Obriši odabrane
               </button>
               <button type="button" className="action-btn assign-btn" onClick={openAssignGroupModal}>
-                Dodaj u grupu
+                <span className="button-icon">👥</span> Dodaj u grupu
               </button>
             </div>
 
             <div className="table-wrapper">
+              {loading ? (
+                <div className="loading-skeleton-container">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="skeleton-row">
+                      <div className="skeleton-cell" style={{width: '40px'}}></div>
+                      <div className="skeleton-cell" style={{width: '15%'}}></div>
+                      <div className="skeleton-cell" style={{width: '10%'}}></div>
+                      <div className="skeleton-cell" style={{width: '12%'}}></div>
+                      <div className="skeleton-cell" style={{width: '15%'}}></div>
+                      <div className="skeleton-cell" style={{width: '10%'}}></div>
+                      <div className="skeleton-cell" style={{width: '10%'}}></div>
+                      <div className="skeleton-cell" style={{width: '10%'}}></div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <table className="device-table">
                 <thead>
                   <tr>
@@ -2019,6 +2062,7 @@ function App() {
                   )}
                 </tbody>
               </table>
+              )}
             </div>
             {selectedDevice && !showViewModal && (
               <div className="device-details-card">
@@ -2601,6 +2645,18 @@ function App() {
 
       {loading && <div className="loading-overlay">Osvježavanje...</div>}
       {statusMessage && <div className="status-message">{statusMessage}</div>}
+      
+      {/* Toast Notifications */}
+      <div className="toast-container">
+        {toastMessages.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.type}`}>
+            <div className="toast-content">
+              <strong>{toast.title}</strong>
+              <p>{toast.message}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
