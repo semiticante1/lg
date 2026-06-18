@@ -19,6 +19,7 @@ const {
   adjustWebosVolume,
   setWebosVolume,
 } = require("./tv-adapter");
+const { discoverLGTVs } = require("./device-discovery");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -555,6 +556,47 @@ app.get("/devices", async (req, res) => {
     res.json(refreshed);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Device discovery endpoint using SSDP
+app.get("/devices/discover", async (req, res) => {
+  try {
+    console.log("[Server] Starting SSDP device discovery...");
+    res.setHeader("Content-Type", "application/json");
+
+    // Start discovery, it will take a few seconds
+    const discoveredDevices = await discoverLGTVs(5000); // 5 second timeout
+
+    // Get list of already added devices to mark duplicates
+    const existingIPs = new Set();
+    const existingDevices = await allAsync(`SELECT ip FROM devices`);
+    existingDevices.forEach((d) => {
+      existingIPs.add(d.ip);
+    });
+
+    // Mark which devices are already added
+    const devicesWithStatus = discoveredDevices.map((device) => ({
+      ...device,
+      already_added: existingIPs.has(device.ip),
+    }));
+
+    console.log(
+      `[Server] Discovery complete. Found ${discoveredDevices.length} LG TVs`
+    );
+
+    res.json({
+      success: true,
+      count: devicesWithStatus.length,
+      devices: devicesWithStatus,
+    });
+  } catch (error) {
+    console.error("[Server] Discovery error:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      devices: [],
+    });
   }
 });
 

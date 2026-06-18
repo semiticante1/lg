@@ -100,6 +100,10 @@ function App() {
     onConfirm?: () => Promise<void> | void;
   } | null>(null);
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
+  const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
+  const [discoveredDevices, setDiscoveredDevices] = useState<any[]>([]);
+  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [selectedDiscoveredDevices, setSelectedDiscoveredDevices] = useState<Set<string>>(new Set());
 
   const baseUrl = backendUrl.replace(/\/$/, "");
 
@@ -987,6 +991,97 @@ function App() {
       console.error("Greska pri restartu uređaja:", error);
       showToast("error", "Greška", "Greška pri restartu uređaja.");
     }
+  };
+
+  const handleStartDiscovery = async () => {
+    setDiscoveryLoading(true);
+    setDiscoveredDevices([]);
+    setSelectedDiscoveredDevices(new Set());
+
+    try {
+      const response = await fetch(`${baseUrl}/devices/discover`);
+      if (!response.ok) {
+        showToast("error", "Greška", "Skeniranje nije uspjelo");
+        setDiscoveryLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      if (data.success && data.devices) {
+        setDiscoveredDevices(data.devices);
+        if (data.devices.length === 0) {
+          showToast("info", "Skeniranje", "Nisu pronađeni LG TVi na mreži");
+        } else {
+          showToast("success", "Skeniranje", `Pronađeno ${data.devices.length} LG TV-a`);
+        }
+      }
+    } catch (error) {
+      console.error("Discovery error:", error);
+      showToast("error", "Greška", "Greška pri skeniranju");
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  };
+
+  const handleAddDiscoveredDevices = async () => {
+    if (selectedDiscoveredDevices.size === 0) {
+      showToast("info", "Skeniranje", "Odaberi barem jedan TV");
+      return;
+    }
+
+    try {
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const ip of selectedDiscoveredDevices) {
+        const device = discoveredDevices.find((d) => d.ip === ip);
+        if (!device) continue;
+
+        try {
+          const response = await fetch(`${baseUrl}/devices`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: device.name || `LG TV (${ip})`,
+              ip: device.ip,
+              mac: device.mac || "00:00:00:00:00:00",
+              brand: device.brand || "lg",
+              groupId: null,
+            }),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            failureCount++;
+          }
+        } catch {
+          failureCount++;
+        }
+      }
+
+      setShowDiscoveryModal(false);
+      setSelectedDiscoveredDevices(new Set());
+      setDiscoveredDevices([]);
+
+      if (successCount > 0) {
+        showToast("success", "Uspješno dodano", `${successCount} TV-a dodano u bazu`);
+        await refreshAll();
+      }
+
+      if (failureCount > 0) {
+        showToast("error", "Greška", `${failureCount} TV-a nije uspjelo dodati`);
+      }
+    } catch (error) {
+      console.error("Add discovered devices error:", error);
+      showToast("error", "Greška", "Greška pri dodavanju TV-a");
+    }
+  };
+
+  const closeDiscoveryModal = () => {
+    setShowDiscoveryModal(false);
+    setDiscoveredDevices([]);
+    setSelectedDiscoveredDevices(new Set());
   };
 
   const handleSendDeviceAction = async (id: number, action: string) => {
@@ -2755,8 +2850,11 @@ function App() {
 
             <div className="modal-buttons">
               <button type="button" onClick={() => setShowModal(false)}>Otkaži</button>
+              <button type="button" className="discover-btn" onClick={() => { setShowModal(false); setShowDiscoveryModal(true); }}>
+                🔍 Skeniraj TVe
+              </button>
               <button type="button" className="save-btn" onClick={handleSave}>
-                Sacuvaj
+                Spremi
               </button>
             </div>
           </div>
@@ -2766,6 +2864,76 @@ function App() {
       {loading && <div className="loading-overlay">Osvježavanje...</div>}
       {statusMessage && <div className="status-message">{statusMessage}</div>}
       
+      {/* Device Discovery Modal */}
+      {showDiscoveryModal && (
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeDiscoveryModal(); }}>
+          <div className="modal">
+            <h2>🔍 Skeniraj mrežu za LG TVe</h2>
+            
+            {discoveryLoading ? (
+              <div className="discovery-loading">
+                <p>Skeniram mrežu... Molim čekaj (~5 sekundi)...</p>
+              </div>
+            ) : discoveredDevices.length === 0 ? (
+              <div className="discovery-empty">
+                <p>Nisu pronađeni LG TVi. Klikni "Skeniraj" da pokušaš ponovo.</p>
+              </div>
+            ) : (
+              <div className="discovery-list">
+                <p>Pronađeno {discoveredDevices.length} TV-a. Odaberi koje želiš dodati:</p>
+                <div className="discovery-devices">
+                  {discoveredDevices.map((device) => (
+                    <div key={device.ip} className="discovery-device">
+                      <input
+                        type="checkbox"
+                        id={`device-${device.ip}`}
+                        checked={selectedDiscoveredDevices.has(device.ip)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedDiscoveredDevices);
+                          if (e.target.checked) {
+                            newSelected.add(device.ip);
+                          } else {
+                            newSelected.delete(device.ip);
+                          }
+                          setSelectedDiscoveredDevices(newSelected);
+                        }}
+                      />
+                      <label htmlFor={`device-${device.ip}`}>
+                        <div>
+                          <strong>{device.name}</strong>
+                          {device.already_added && <span className="badge-added">✓ Već dodan</span>}
+                        </div>
+                        <small>{device.ip}</small>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="modal-buttons">
+              <button type="button" onClick={closeDiscoveryModal}>Otkaži</button>
+              <button 
+                type="button" 
+                className="discover-btn" 
+                onClick={handleStartDiscovery}
+                disabled={discoveryLoading}
+              >
+                {discoveryLoading ? "Skeniram..." : "🔄 Skeniraj ponovo"}
+              </button>
+              <button 
+                type="button" 
+                className="save-btn" 
+                onClick={handleAddDiscoveredDevices}
+                disabled={selectedDiscoveredDevices.size === 0 || discoveryLoading}
+              >
+                ✅ Dodaj ({selectedDiscoveredDevices.size})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Schedule Builder Modal */}
       <ScheduleBuilderModal
         isOpen={showScheduleBuilder}
