@@ -413,12 +413,10 @@ const executeScheduleAction = async (scheduleId) => {
             if (step.settleMs && Number(step.settleMs) > 0) {
               await new Promise((r) => setTimeout(r, Number(step.settleMs)));
             }
-            break;
           case "poweroff":
             await powerOffDevice(device);
             await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
             try { await broadcastDeviceState(device.id); } catch (e) {}
-            break;
           case "restart":
             await wakeDevice(device.mac);
             await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
@@ -658,22 +656,26 @@ app.post("/devices/:id/poweroff", async (req, res) => {
       });
     }
 
-    const success = await powerOffDevice(device);
-    const newState = success ? "Off" : device.power_state || device.powerState || "Off";
+    const result = await powerOffDevice(device);
+    const newState = result.success ? "Off" : (device.power_state || device.powerState || "Unknown");
 
     await runAsync(`UPDATE devices SET power_state = ? WHERE id = ?`, [newState, device.id]);
     try { await broadcastDeviceState(device.id); } catch (e) {}
 
-    console.log(`Power off requested for ${device.name} (${device.ip}) brand=${device.brand} success=${success}`);
+    console.log(`Power off requested for ${device.name} (${device.ip}) brand=${device.brand} result=${JSON.stringify(result)}`);
 
     res.json({
-      success,
-      message: success ? "Power off completed" : "Power off request sent but did not confirm.",
+      success: result.success,
+      message: result.success ? "Power off completed" : `Power off failed: ${result.reason}`,
+      reason: result.reason,
+      method: result.method,
       device: device.name,
     });
   } catch (error) {
     res.status(500).json({
+      success: false,
       error: error.message,
+      reason: "Server error during power off"
     });
   }
 });
@@ -1049,8 +1051,8 @@ app.post("/devices/poweroff-all", async (req, res) => {
 
     const results = await Promise.all(
       devices.map(async (device) => {
-        const poweredOff = await powerOffDevice(device);
-        const newState = poweredOff ? "Off" : device.power_state || device.powerState || "Off";
+        const result = await powerOffDevice(device);
+        const newState = result.success ? "Off" : device.power_state || device.powerState || "Off";
 
         await runAsync(`UPDATE devices SET power_state = ? WHERE id = ?`, [newState, device.id]);
 
@@ -1058,7 +1060,9 @@ app.post("/devices/poweroff-all", async (req, res) => {
           id: device.id,
           name: device.name,
           brand: device.brand || "generic",
-          poweredOff,
+          success: result.success,
+          reason: result.reason,
+          method: result.method,
         };
       })
     );
@@ -1179,8 +1183,8 @@ app.post("/groups/:id/poweroff", async (req, res) => {
 
     const results = await Promise.all(
       devices.map(async (device) => {
-        const poweredOff = await powerOffDevice(device);
-        const newState = poweredOff ? "Off" : device.power_state || device.powerState || "Off";
+        const result = await powerOffDevice(device);
+        const newState = result.success ? "Off" : device.power_state || device.powerState || "Off";
         await runAsync(
           `UPDATE devices SET power_state = ?, status = 'Offline' WHERE id = ?`,
           [newState, device.id]
@@ -1188,7 +1192,9 @@ app.post("/groups/:id/poweroff", async (req, res) => {
         return {
           id: device.id,
           name: device.name,
-          poweredOff,
+          success: result.success,
+          reason: result.reason,
+          method: result.method,
         };
       })
     );

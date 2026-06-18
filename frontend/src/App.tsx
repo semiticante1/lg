@@ -141,7 +141,7 @@ function App() {
       setLastRefresh(new Date().toLocaleTimeString());
       setStatusMessage("Automatsko osvježenje statusa");
       setTimeout(() => setStatusMessage(""), 2000);
-    }, 20000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [baseUrl]);
@@ -896,11 +896,16 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        showMessage(
-          "Greška",
-          `Nije uspjelo gašenje uređaja: ${errorData?.error || response.statusText}`
-        );
+        const errorMsg = errorData?.reason || errorData?.error || `Greška: ${response.statusText}`;
+        showMessage("Greška pri gašenju", errorMsg);
         // Re-sync from server to ensure correct state
+        await refreshAll();
+        return;
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        showMessage("Gašenje nije uspjelo", data.reason || "Nepoznata greška");
         await refreshAll();
         return;
       }
@@ -934,7 +939,8 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        showToast("error", "Greška", `Nije uspjelo paljenje: ${errorData?.error || response.statusText}`);
+        const errorMsg = errorData?.reason || errorData?.error || `Greška: ${response.statusText}`;
+        showToast("error", "Greška", `Nije uspjelo paljenje: ${errorMsg}`);
         await refreshAll();
         return;
       }
@@ -943,7 +949,7 @@ function App() {
       if (data.success) {
         showToast("success", "Zahtjev poslan", "WoL paket poslan. TV će se upaliti ako je WoL aktivan (Quick Start+ u postavkama TV-a).");
       } else {
-        showToast("error", "Nije uspjelo", "Paljenje nije potvrđeno. Provjeri je li 'Quick Start+' uključen u postavkama LG TV-a.");
+        showToast("error", "Nije uspjelo", `Paljenje nije potvrđeno: ${data.reason || "Provjeri je li 'Quick Start+' uključen u postavkama LG TV-a"}.`);
       }
       await refreshAll();
     } catch (error) {
@@ -963,20 +969,23 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        showToast("error", "Greška", `Nije uspio restart: ${errorData?.error || response.statusText}`);
+        const errorMsg = errorData?.reason || errorData?.error || `Greška: ${response.statusText}`;
+        showToast("error", "Greška", `Nije uspio restart: ${errorMsg}`);
         return;
       }
 
       const data = await response.json();
-      if (data.method === "webos") {
+      if (data.restarted && data.method === "webos") {
         showToast("success", "Restart pokrenuto", "TV se gasi... pokretat će se automatski za ~10 sekundi.");
-      } else {
+      } else if (data.restarted) {
         showToast("success", "Restart poslan", `Zahtjev poslan za ${data.name || "uređaj"}.`);
+      } else {
+        showToast("info", "Restart zahtjev", "Restart zahtjev je poslan, ali nije potvrđen. Ako TV ima WoL, trebao bi se pokrenuti za nekoliko sekundi.");
       }
       await refreshAll();
     } catch (error) {
       console.error("Greska pri restartu uređaja:", error);
-      showMessage("Greška", "Greška pri restartu uređaja.");
+      showToast("error", "Greška", "Greška pri restartu uređaja.");
     }
   };
 

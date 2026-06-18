@@ -361,22 +361,36 @@ const powerOffDevice = async (device) => {
   const ip = device.ip;
 
   if (brand === "lg" || brand === "webos") {
-    return sendWebosPowerOff(ip);
+    const result = await sendWebosPowerOff(ip);
+    return result ? { success: true, method: "webos" } : { success: false, reason: "WebOS connection failed" };
   }
 
   if (brand === "samsung") {
     const alive = await pingDevice(ip);
     if (!alive) {
-      return false;
+      return { success: false, reason: "Samsung TV nije dostižan (ping failed)" };
     }
-    return sendSamsungPowerOff(ip);
+    const result = await sendSamsungPowerOff(ip);
+    return result ? { success: true, method: "samsung" } : { success: false, reason: "Samsung power command failed" };
   }
 
   if (brand === "generic") {
-    return sendWebosPowerOff(ip);
+    // Try webOS first, then fallback to WoL poweroff attempt
+    const webosResult = await sendWebosPowerOff(ip);
+    if (webosResult) {
+      return { success: true, method: "webos" };
+    }
+    
+    // Fallback: check if device is reachable via ping, then try WoL-based poweroff
+    const alive = await pingDevice(ip);
+    if (!alive) {
+      return { success: false, reason: "Uređaj nije dostižan (ping failed)" };
+    }
+    
+    return { success: false, reason: "WebOS nije dostupan, ali TV je dostižan. Probaj WoL ili ručno gašenje." };
   }
 
-  return false;
+  return { success: false, reason: "Unknown device brand" };
 };
 
 const queryDevicePowerState = async (device) => {
