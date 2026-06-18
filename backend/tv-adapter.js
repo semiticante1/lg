@@ -319,6 +319,23 @@ const querySamsungPowerState = async (ip) => {
   return alive ? "On" : "Off";
 };
 
+const sendWebosRestart = async (ip, mac) => {
+  // Step 1: Turn off via webOS
+  await sendWebosRequest(
+    ip,
+    {
+      type: "request",
+      id: "restart_turnoff",
+      uri: "ssap://system/turnOff",
+      payload: {},
+    },
+    ["CONTROL_POWER"]
+  );
+  // Step 2: Wait 8s then wake via WoL
+  await new Promise((r) => setTimeout(r, 8000));
+  return wakeDevice(mac);
+};
+
 const powerOnDevice = async (device) => {
   const brand = normalizeBrand(device.brand);
   const ip = device.ip;
@@ -389,6 +406,7 @@ module.exports = {
   powerOffDevice,
   queryDevicePowerState,
   sendWebosPowerOff,
+  sendWebosRestart,
   launchWebosApp,
   setWebosMute,
   adjustWebosVolume,

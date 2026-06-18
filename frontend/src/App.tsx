@@ -916,6 +916,7 @@ function App() {
   };
 
   const handlePowerOnDevice = async (id: number) => {
+    showToast("info", "Uključivanje", "Šaljem WoL paket za paljenje TV-a...");
     // Optimistic UI update: mark device as On immediately
     const device = devices.find((d) => d.id === id);
     if (device) {
@@ -923,8 +924,6 @@ function App() {
         prev.map((d) => (d.id === id ? { ...d, powerState: "On", power_state: "On" } : d))
       );
       recordDeviceEvent({ ...device, powerState: "On" }, "Manual power on requested");
-      setStatusMessage("Zahtjev za paljenje poslan (status ažuriran lokalno).");
-      setTimeout(() => setStatusMessage(""), 3000);
     }
 
     try {
@@ -935,23 +934,27 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        showMessage(
-          "Greška",
-          `Nije uspjelo paljenje uređaja: ${errorData?.error || response.statusText}`
-        );
+        showToast("error", "Greška", `Nije uspjelo paljenje: ${errorData?.error || response.statusText}`);
         await refreshAll();
         return;
       }
 
+      const data = await response.json();
+      if (data.success) {
+        showToast("success", "Zahtjev poslan", "WoL paket poslan. TV će se upaliti ako je WoL aktivan (Quick Start+ u postavkama TV-a).");
+      } else {
+        showToast("error", "Nije uspjelo", "Paljenje nije potvrđeno. Provjeri je li 'Quick Start+' uključen u postavkama LG TV-a.");
+      }
       await refreshAll();
     } catch (error) {
       console.error("Greska pri paljenju uređaja:", error);
-      showMessage("Greška", "Greška pri paljenju uređaja.");
+      showToast("error", "Greška", "Greška pri paljenju uređaja.");
       await refreshAll();
     }
   };
 
   const handleRestartDevice = async (id: number) => {
+    showToast("info", "Restart", "Šaljem naredbu za restart TV-a...");
     try {
       const response = await fetch(`${baseUrl}/devices/${id}/restart`, {
         method: "POST",
@@ -960,16 +963,16 @@ function App() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        showMessage(
-          "Greška",
-          `Nije uspio restart uređaja: ${errorData?.error || response.statusText}`
-        );
+        showToast("error", "Greška", `Nije uspio restart: ${errorData?.error || response.statusText}`);
         return;
       }
 
       const data = await response.json();
-      setStatusMessage(`Restart poslan: ${data.device || "uređaj"}.`);
-      setTimeout(() => setStatusMessage(""), 4000);
+      if (data.method === "webos") {
+        showToast("success", "Restart pokrenuto", "TV se gasi... pokretat će se automatski za ~10 sekundi.");
+      } else {
+        showToast("success", "Restart poslan", `Zahtjev poslan za ${data.name || "uređaj"}.`);
+      }
       await refreshAll();
     } catch (error) {
       console.error("Greska pri restartu uređaja:", error);
@@ -1232,6 +1235,8 @@ function App() {
       return;
     }
 
+    showToast("info", "Restart", `Šaljem naredbu za restart ${selectedIds.length} uređaj(a)...`);
+
     await fetch(`${baseUrl}/devices/restart`, {
       method: "POST",
       headers: {
@@ -1240,7 +1245,7 @@ function App() {
       body: JSON.stringify({ ids: selectedIds }),
     });
 
-    showMessage("Info", "Restart zapocet za oznacene uredaje.");
+    showToast("success", "Restart pokrenuto", `Restart pokrenut za ${selectedIds.length} uređaj(a). WebOS TV-i se gase i palju automatski za ~10 sekundi.`);
   };
 
   // @ts-ignore - unused but may be needed for future use
@@ -1288,6 +1293,7 @@ function App() {
   };
 
   const handleRestartGroup = async (groupId: number) => {
+    showToast("info", "Restart grupe", "Šaljem naredbu za restart svih uređaja u grupi...");
     await fetch(`${baseUrl}/groups/${groupId}/restart`, {
       method: "POST",
       headers: {
@@ -1295,7 +1301,7 @@ function App() {
       },
     });
 
-    showMessage("Info", "Restart grupe pokrenut.");
+    showToast("success", "Restart pokrenuto", "WebOS TV-i se gase i palju automatski za ~10 sekundi.");
   };
 
   const handlePowerOnGroup = async (groupId: number) => {
@@ -1482,7 +1488,7 @@ function App() {
   return (
     <div className={`app theme-${theme}`}>
       <aside className="sidebar">
-        <h2>LG TV Upravljač</h2>
+        <h2>TV Upravljač</h2>
         <div className="sidebar-menu">
           <p className={activePage === "dashboard" ? "active" : ""} onClick={() => setActivePage("dashboard")}>📊 Početna</p>
           <p className={activePage === "devices" ? "active" : ""} onClick={() => setActivePage("devices")}>📺 Uređaji</p>
@@ -2507,27 +2513,27 @@ function App() {
 
                   <div className="detail-actions">
                     <button type="button" className="action-btn poweron-btn" onClick={() => handlePowerOnDevice(viewModalDeviceInfo.id)}>
-                      Uključi
+                      ✅ Uključi
                     </button>
                     <button type="button" className="action-btn poweroff-btn" onClick={() => handlePowerOffDevice(viewModalDeviceInfo.id)}>
-                      Isključi
+                      ⏻ Isključi
                     </button>
                     <button type="button" className="action-btn restart-btn" onClick={() => handleRestartDevice(viewModalDeviceInfo.id)}>
-                      Restart
+                      🔄 Restart
                     </button>
                     {viewModalDeviceInfo.brand?.toLowerCase() === "webos" && (
                       <>
                         <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "mute"); }}>
-                          Mute
+                          🔇 Mute
                         </button>
                         <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "unmute"); }}>
-                          Unmute
+                          🔊 Unmute
                         </button>
                         <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeUp"); }}>
-                          + Volume
+                          🔼 Vol+
                         </button>
                         <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeDown"); }}>
-                          - Volume
+                          🔽 Vol-
                         </button>
                       </>
                     )}
@@ -2539,14 +2545,14 @@ function App() {
                       className={detailTab === "info" ? "tab-btn active" : "tab-btn"}
                       onClick={() => setDetailTab("info")}
                     >
-                      Informacije
+                      📋 Informacije
                     </button>
                     <button
                       type="button"
                       className={detailTab === "schedule" ? "tab-btn active" : "tab-btn"}
                       onClick={() => setDetailTab("schedule")}
                     >
-                      Rasporedi
+                      📅 Rasporedi
                     </button>
                   </div>
 
@@ -2589,19 +2595,19 @@ function App() {
                                     className={schedule.enabled ? "action-btn poweron-btn" : "action-btn"}
                                     onClick={() => handleToggleSchedule(schedule)}
                                   >
-                                    {schedule.enabled ? "On" : "Off"}
+                                    {schedule.enabled ? "✅ On" : "⭕ Off"}
                                   </button>
                                   <button type="button" className="action-btn" onClick={() => fetchScheduleLogs(schedule)}>
-                                    Logovi
+                                    📄 Logovi
                                   </button>
                                   <button type="button" className="action-btn" onClick={() => handleTriggerSchedule(schedule)}>
-                                    Pokreni
+                                    ▶️ Pokreni
                                   </button>
                                   <button type="button" className="action-btn settings-btn" onClick={() => handleEditSchedule(schedule)}>
-                                    Uredi
+                                    ✏️ Uredi
                                   </button>
                                   <button type="button" className="action-btn delete-selected-btn" onClick={() => handleDeleteSchedule(schedule.id)}>
-                                    Obriši
+                                    🗑️ Obriši
                                   </button>
                                 </div>
                               </div>

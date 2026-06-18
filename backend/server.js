@@ -10,6 +10,7 @@ const cron = require("node-cron");
 const { powerOnAll } = require("./power-on-all");
 const {
   powerOnDevice,
+  sendWebosRestart,
   powerOffDevice,
   queryDevicePowerState,
   wakeDevice,
@@ -951,22 +952,24 @@ app.post("/devices/:id/restart", async (req, res) => {
       });
     }
 
-    const restarted = await wakeDevice(device.mac);
+    const brand = (device.brand || "").trim().toLowerCase();
+    console.log(`Restart requested for ${device.name} (${device.ip}) brand=${brand}`);
 
-    if (restarted) {
-      await runAsync(
-        `UPDATE devices SET status = 'Online', power_state = 'On' WHERE id = ?`,
-        [device.id]
-      );
+    if (brand === "webos" || brand === "lg") {
+      // For webOS: power off via webOS, then WoL after 8s (non-blocking)
+      res.json({ id: device.id, name: device.name, restarted: true, method: "webos" });
+      sendWebosRestart(device.ip, device.mac).then(async () => {
+        await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+        try { await broadcastDeviceState(device.id); } catch (e) {}
+      }).catch((e) => console.error("Restart error:", e));
+    } else {
+      const restarted = await wakeDevice(device.mac);
+      if (restarted) {
+        await runAsync(`UPDATE devices SET status = 'Online', power_state = 'On' WHERE id = ?`, [device.id]);
+        try { await broadcastDeviceState(device.id); } catch (e) {}
+      }
+      res.json({ id: device.id, name: device.name, restarted });
     }
-
-    console.log(`Restart requested for ${device.name} (${device.ip}) brand=${device.brand}`);
-
-    res.json({
-      id: device.id,
-      name: device.name,
-      restarted,
-    });
   } catch (error) {
     res.status(500).json({
       error: error.message,
@@ -988,15 +991,23 @@ app.post("/devices/restart", async (req, res) => {
       ids
     );
 
-    const results = await Promise.all(
-      devices.map(async (device) => ({
-        id: device.id,
-        name: device.name,
-        restarted: await wakeDevice(device.mac),
-      }))
-    );
+    // Respond immediately, restart runs in background
+    res.json({ results: devices.map((d) => ({ id: d.id, name: d.name, restarted: true })) });
 
-    res.json({ results });
+    // Run restarts in background
+    for (const device of devices) {
+      const brand = (device.brand || "").trim().toLowerCase();
+      if (brand === "webos" || brand === "lg") {
+        sendWebosRestart(device.ip, device.mac).then(async () => {
+          await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+          try { await broadcastDeviceState(device.id); } catch (e) {}
+        }).catch((e) => console.error(`Restart error for ${device.name}:`, e));
+      } else {
+        wakeDevice(device.mac).then(async (ok) => {
+          if (ok) await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+        });
+      }
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1137,15 +1148,23 @@ app.post("/groups/:id/restart", async (req, res) => {
       groupId,
     ]);
 
-    const results = await Promise.all(
-      devices.map(async (device) => ({
-        id: device.id,
-        name: device.name,
-        restarted: await wakeDevice(device.mac),
-      }))
-    );
+    // Respond immediately
+    res.json({ results: devices.map((d) => ({ id: d.id, name: d.name, restarted: true })) });
 
-    res.json({ results });
+    // Run restarts in background
+    for (const device of devices) {
+      const brand = (device.brand || "").trim().toLowerCase();
+      if (brand === "webos" || brand === "lg") {
+        sendWebosRestart(device.ip, device.mac).then(async () => {
+          await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+          try { await broadcastDeviceState(device.id); } catch (e) {}
+        }).catch((e) => console.error(`Group restart error for ${device.name}:`, e));
+      } else {
+        wakeDevice(device.mac).then(async (ok) => {
+          if (ok) await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+        });
+      }
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

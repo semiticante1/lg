@@ -489,10 +489,33 @@ select {
 
 .detail-row {
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 0;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  transition: all 0.2s ease;
+}
+
+.detail-row:hover {
+  padding-left: 8px;
+  color: var(--accent);
+}
+
+.detail-icon {
+  font-size: 1.1em;
+  min-width: 1.2em;
+  text-align: center;
+  opacity: 0.8;
+}
+
+.detail-row span:nth-child(2) {
+  color: var(--text-secondary);
+}
+
+.detail-row strong {
+  margin-left: auto;
+  color: var(--text);
+  font-weight: 600;
 }
 
 .history-section {
@@ -513,14 +536,41 @@ select {
 
 .detail-tabs {
   display: flex;
-  gap: 10px;
-  margin: 18px 0;
+  gap: 12px;
+  margin: 24px 0 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.detail-tabs .tab-btn {
+  padding: 12px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-tabs .tab-btn:hover {
+  color: var(--text);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.detail-tabs .tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
 }
 
 .detail-actions {
   display: flex;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 16px;
+  flex-wrap: wrap;
 }
 
 .modal-header {
@@ -1885,4 +1935,95 @@ textarea:focus {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* View Modal Enhancements */
+.view-modal {
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-soft) 100%);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.14), 0 0 60px var(--glow);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.view-modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.4), transparent);
+  pointer-events: none;
+}
+
+.view-modal::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.1), transparent 80%);
+  pointer-events: none;
+}
+
+/* Device Meta Icons */
+.detail-icon {
+  font-size: 1.1em;
+  min-width: 1.2em;
+  text-align: center;
+  opacity: 0.8;
+}
+
+/* Button Icons */
+.btn-icon {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 1.1em;
+}
+
+.view-modal .action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+  min-width: auto;
+}
+
+.view-modal .action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px var(--glow);
+}
+
+.view-modal .action-btn.poweron-btn {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  color: white;
+}
+
+.view-modal .action-btn.poweron-btn:hover {
+  box-shadow: 0 0 30px rgba(74, 222, 128, 0.5);
+}
+
+.view-modal .action-btn.poweroff-btn {
+  background: linear-gradient(135deg, #fb7185 0%, #f43f5e 100%);
+  color: white;
+}
+
+.view-modal .action-btn.poweroff-btn:hover {
+  box-shadow: 0 0 30px rgba(251, 113, 133, 0.5);
+}
+
+.view-modal .action-btn.restart-btn {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  color: white;
+}
+
+.view-modal .action-btn.restart-btn:hover {
+  box-shadow: 0 0 30px rgba(96, 165, 250, 0.5);
+}
+
+/* Tab Icons */
+.tab-icon {
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 1.15em;
 }
