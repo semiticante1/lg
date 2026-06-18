@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import ScheduleBuilderModal from "./components/ScheduleBuilderModal";
 
 interface Device {
   id: number;
@@ -82,7 +83,8 @@ function App() {
   const [statusMessage, setStatusMessage] = useState("");
   const [toastMessages, setToastMessages] = useState<Array<{id: string, type: 'info' | 'success' | 'error', title: string, message: string}>>([]);
   const [loading, setLoading] = useState(false);
-  const [tableLoading, setTableLoading] = useState(false);
+  // @ts-ignore - unused but may be needed for future use
+  const [_tableLoading, _setTableLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const initialLoadRef = useRef(false);
@@ -97,6 +99,7 @@ function App() {
     cancelText?: string;
     onConfirm?: () => Promise<void> | void;
   } | null>(null);
+  const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
 
   const baseUrl = backendUrl.replace(/\/$/, "");
 
@@ -604,6 +607,77 @@ function App() {
       }
     };
 
+    const handleSaveScheduleBuilder = async (data: { hour: number; minute: number; days: number[]; cron: string }) => {
+      if (!selectedDeviceId) {
+        showMessage("Greška", "Nema odabranog uređaja.");
+        return;
+      }
+
+      setScheduleCron(data.cron);
+      
+      // Validate action
+      const available = getAvailableActions(selectedDevice);
+      if (!available.some((action) => action.value === scheduleAction)) {
+        showMessage("Greška", "Odabrana akcija nije podržana za ovaj uređaj.");
+        return;
+      }
+
+      // Build payload
+      let payload: any;
+      if (Array.isArray(scheduleSequence) && scheduleSequence.length > 0) {
+        payload = {
+          cron: data.cron,
+          actions: scheduleSequence.map((s) => ({
+            action: s.action,
+            params: s.params || {},
+            delayMs: s.delayMs || undefined,
+            waitForReadyMs: s.waitForReadyMs || undefined,
+            settleMs: s.settleMs || undefined,
+          })),
+          description: scheduleDescription.trim(),
+          enabled: scheduleEnabled,
+        };
+      } else {
+        payload = {
+          cron: data.cron,
+          action: scheduleAction,
+          action_params:
+            scheduleAction === "launchApp"
+              ? { target: scheduleTarget.trim() }
+              : scheduleAction === "setVolume"
+              ? { volume: Number(scheduleTarget) }
+              : {},
+          description: scheduleDescription.trim(),
+          enabled: scheduleEnabled,
+        };
+      }
+
+      try {
+        const url = editingScheduleId
+          ? `${baseUrl}/devices/${selectedDeviceId}/schedules/${editingScheduleId}`
+          : `${baseUrl}/devices/${selectedDeviceId}/schedules`;
+        const method = editingScheduleId ? "PUT" : "POST";
+        const response = await fetch(url, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          showMessage("Greška", errorData?.error || "Neuspješno spremanje rasporeda.");
+          return;
+        }
+
+        await loadDeviceSchedules(selectedDeviceId);
+        clearScheduleForm();
+        showMessage("Info", "Raspored je uspješno spremljen!");
+      } catch (error) {
+        console.error("Greška pri spremanju rasporeda:", error);
+        showMessage("Greška", "Greška pri spremanju rasporeda.");
+      }
+    };
+
   const recordDeviceEvent = (device: Device, note: string) => {
     setDeviceHistory((prevHistory) => {
       const existing = prevHistory[device.id] || [];
@@ -831,7 +905,6 @@ function App() {
         return;
       }
 
-      const data = await response.json();
       // backend accepted the request; final sync
       await refreshAll();
     } catch (error) {
@@ -870,7 +943,6 @@ function App() {
         return;
       }
 
-      const data = await response.json();
       await refreshAll();
     } catch (error) {
       console.error("Greska pri paljenju uređaja:", error);
@@ -999,6 +1071,7 @@ function App() {
         setShowDeleteConfirm(false);
         setShowAssignGroupModal(false);
         setMessageModal(null);
+        setShowScheduleBuilder(false);
         setOpenDropdownId(null);
       }
     };
@@ -1006,6 +1079,8 @@ function App() {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
+      
+      // Close dropdown when clicking outside
       if (!target.closest('.action-dropdown-wrapper')) {
         setOpenDropdownId(null);
       }
@@ -1018,6 +1093,19 @@ function App() {
       document.removeEventListener('click', handleClickOutside);
     };
   }, []);
+
+  // Lock body scroll when modals are open
+  useEffect(() => {
+    const isAnyModalOpen = showModal || showViewModal || showDeleteConfirm || showAssignGroupModal || messageModal || showScheduleBuilder;
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [showModal, showViewModal, showDeleteConfirm, showAssignGroupModal, messageModal, showScheduleBuilder]);
 
   const handleViewDevice = async (id: number) => {
     const dev = devices.find((d) => d.id === id) || null;
@@ -1155,7 +1243,8 @@ function App() {
     showMessage("Info", "Restart zapocet za oznacene uredaje.");
   };
 
-  const handleApplySettings = async () => {
+  // @ts-ignore - unused but may be needed for future use
+  const _handleApplySettings = async () => {
     const selectedIds = devices
       .filter((device) => device.selected)
       .map((device) => device.id);
@@ -1731,7 +1820,7 @@ function App() {
 
 
             {showDeleteConfirm && (
-              <div className="modal-overlay">
+              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteConfirm(false); }}>
                 <div className="modal">
                   <h2>Potvrda brisanja</h2>
                   <p>Da li želiš obrisati odabrani uređaj?</p>
@@ -1747,7 +1836,7 @@ function App() {
               </div>
             )}
             {showAssignGroupModal && (
-              <div className="modal-overlay">
+              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowAssignGroupModal(false); }}>
                 <div className="modal">
                   <h2>Dodaj u grupu</h2>
                   <p>Izaberi grupu za označene uređaje:</p>
@@ -1779,7 +1868,7 @@ function App() {
             )}
 
             {messageModal && (
-              <div className="modal-overlay">
+              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setMessageModal(null); }}>
                 <div className="modal">
                   <h2>{messageModal.title}</h2>
                   <p>{messageModal.message}</p>
@@ -2211,6 +2300,14 @@ function App() {
 
                     <div className="schedule-form">
                       <h3>{editingScheduleId ? "Uredi raspored" : "Dodaj novi raspored"}</h3>
+                      <button 
+                        type="button" 
+                        className="action-btn"
+                        style={{marginBottom: 16}}
+                        onClick={() => setShowScheduleBuilder(true)}
+                      >
+                        📅 Koristi vizualni raspored
+                      </button>
                       <label>Cron izraz</label>
                         <input
                           value={scheduleCron}
@@ -2371,7 +2468,7 @@ function App() {
               </div>
             )}
             {showViewModal && viewModalDeviceInfo && (
-              <div className="modal-overlay">
+              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeViewModal(); }}>
                 <div className="modal">
                   <div className="modal-header">
                     <div>
@@ -2515,6 +2612,14 @@ function App() {
 
                       <div className="schedule-form">
                         <h3>{editingScheduleId ? "Uredi raspored" : "Dodaj novi raspored"}</h3>
+                        <button 
+                          type="button" 
+                          className="action-btn"
+                          style={{marginBottom: 16}}
+                          onClick={() => setShowScheduleBuilder(true)}
+                        >
+                          📅 Koristi vizualni raspored
+                        </button>
                         <label>Cron izraz</label>
                         <input
                           value={scheduleCron}
@@ -2590,7 +2695,7 @@ function App() {
       </main>
 
       {showModal && (
-        <div className="modal-overlay">
+        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
           <div className="modal">
             <h2>{editingId !== null ? "Uredi uredaj" : "Dodaj uredaj"}</h2>
 
@@ -2645,6 +2750,17 @@ function App() {
 
       {loading && <div className="loading-overlay">Osvježavanje...</div>}
       {statusMessage && <div className="status-message">{statusMessage}</div>}
+      
+      {/* Schedule Builder Modal */}
+      <ScheduleBuilderModal
+        isOpen={showScheduleBuilder}
+        onClose={() => setShowScheduleBuilder(false)}
+        onSave={handleSaveScheduleBuilder}
+        onCronChange={setScheduleCron}
+        currentCron={scheduleCron}
+        action={getActionLabel(scheduleAction)}
+        deviceName={selectedDevice?.name || "Uređaj"}
+      />
       
       {/* Toast Notifications */}
       <div className="toast-container">

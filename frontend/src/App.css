@@ -1,20 +1,21 @@
 :root {
-  --bg: #121214;
-  --body-bg: #121214;
-  --surface: #1c1c1f;
-  --surface-soft: #24242a;
-  --surface-strong: #141417;
-  --text: #e4e4e7;
-  --text-muted: #71717a;
-  --heading: #e4e4e7;
-  --border: rgba(255, 255, 255, 0.08);
+  --bg: #0f1419;
+  --body-bg: #0f1419;
+  --surface: #1a202c;
+  --surface-soft: #2d3748;
+  --surface-strong: #0d1117;
+  --text: #e2e8f0;
+  --text-muted: #a0aec0;
+  --heading: #f7fafc;
+  --border: rgba(255, 255, 255, 0.12);
   --accent: #6366f1;
   --accent-soft: rgba(99, 102, 241, 0.18);
   --success: #4ade80;
   --warning: #facc15;
   --danger: #fb7185;
-  --shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+  --shadow: 0 4px 6px -1px rgba(0,0,0,0.15);
   --radius: 12px;
+  --glow: rgba(99, 102, 241, 0.3);
 }
 
 .theme-light {
@@ -67,6 +68,13 @@ body {
   font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--body-bg);
   color: var(--text);
+  transition: background 0.3s ease;
+}
+
+/* Dark mode gradient background */
+body.theme-dark {
+  background: linear-gradient(135deg, #0f1419 0%, #1a202c 50%, #0f1419 100%);
+  background-attachment: fixed;
 }
 
 h1,
@@ -187,14 +195,26 @@ select {
 
 .sidebar {
   width: 280px;
-  background: var(--surface);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-soft) 100%);
   border-radius: var(--radius);
   padding: 28px;
   display: flex;
   flex-direction: column;
   gap: 28px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 0 30px var(--glow);
   border: 1px solid var(--border);
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.sidebar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at bottom, var(--glow), transparent);
+  opacity: 0.3;
+  border-radius: var(--radius);
+  pointer-events: none;
 }
 
 .sidebar h2 {
@@ -215,12 +235,13 @@ select {
   padding: 14px 18px;
   border-radius: 16px;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   color: var(--text);
   display: flex;
   align-items: center;
   gap: 12px;
   border: 1px solid transparent;
+  position: relative;
 }
 
 .sidebar-menu p:hover {
@@ -228,6 +249,7 @@ select {
   color: var(--heading);
   transform: translateX(2px);
   border-color: var(--border);
+  box-shadow: 0 0 20px var(--glow);
 }
 
 .theme-light .sidebar-menu p.active {
@@ -235,6 +257,7 @@ select {
   color: #ffffff;
   border-color: transparent;
   transform: none;
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
 }
 
 .theme-dark .sidebar-menu p.active {
@@ -242,6 +265,7 @@ select {
   color: #ffffff;
   border-color: transparent;
   transform: none;
+  box-shadow: 0 0 30px var(--glow);
 }
 
 .content {
@@ -363,13 +387,36 @@ select {
 }
 
 .stat-card {
-  background: var(--surface);
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-soft) 100%);
   padding: 24px;
   border-radius: var(--radius);
   min-width: 180px;
   flex: 1;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 0 30px var(--glow);
   border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top-right, var(--glow), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow), 0 0 50px var(--glow);
+  border-color: var(--accent);
+}
+
+.stat-card:hover::before {
+  opacity: 1;
 }
 
 .stat-number {
@@ -1152,11 +1199,27 @@ button:disabled {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 20px;
   z-index: 9999;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
 }
 
 .modal {
@@ -1170,6 +1233,18 @@ button:disabled {
   box-sizing: border-box;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
+  animation: slideUp 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .modal h2 {
