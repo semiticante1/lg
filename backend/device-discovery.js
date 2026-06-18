@@ -1,8 +1,39 @@
 const { Client } = require("node-ssdp");
 const { URL } = require("url");
 
+const detectBrand = (location = "", serverHeader = "", usn = "", deviceType = "") => {
+  const haystack = `${location} ${serverHeader} ${usn} ${deviceType}`.toLowerCase();
+
+  if (haystack.includes("samsung") || haystack.includes("tizen")) {
+    return "samsung";
+  }
+
+  if (haystack.includes("lg") || haystack.includes("webos") || haystack.includes("lge")) {
+    return "lg";
+  }
+
+  return "generic";
+};
+
+const isLikelyTV = (location = "", serverHeader = "", usn = "", deviceType = "") => {
+  const haystack = `${location} ${serverHeader} ${usn} ${deviceType}`.toLowerCase();
+  return /tv|television|smart tv|webos|tizen|roku|samsung|lge|lg/.test(haystack);
+};
+
+const getDeviceName = (brand, ip) => {
+  if (brand === "samsung") {
+    return `Samsung TV (${ip})`;
+  }
+
+  if (brand === "lg") {
+    return `LG TV (${ip})`;
+  }
+
+  return `TV (${ip})`;
+};
+
 /**
- * Discover LG WebOS TVs on the network using SSDP
+ * Discover TVs on the network using SSDP
  * Returns array of discovered devices with IP, MAC (if available), and UPnP info
  */
 const discoverLGTVs = async (timeoutMs = 5000) => {
@@ -27,18 +58,12 @@ const discoverLGTVs = async (timeoutMs = 5000) => {
 
       client.on("response", (headers, statusCode, rinfo) => {
         try {
-          // Check if this is a relevant device (webOS TV or similar)
           const location = headers.LOCATION;
           const serverHeader = headers.SERVER || "";
           const usn = headers.USN || "";
+          const deviceType = headers["DEVICE-TYPE"] || headers.ST || "Unknown TV";
 
-          // Filter for LG/webOS devices
-          const isLG =
-            (location && location.includes("lge")) ||
-            (serverHeader && serverHeader.toLowerCase().includes("lg")) ||
-            (usn && usn.includes("lge"));
-
-          if (!location || !isLG) {
+          if (!location || !isLikelyTV(location, serverHeader, usn, deviceType)) {
             return;
           }
 
@@ -56,16 +81,15 @@ const discoverLGTVs = async (timeoutMs = 5000) => {
             return;
           }
 
-          // Extract friendly name if available
-          const deviceType = headers["DEVICE-TYPE"] || "Unknown TV";
           const st = headers.ST || "";
+          const brand = detectBrand(location, serverHeader, usn, deviceType);
 
-          console.log(`[Discovery] Found LG device at ${ip}: ${st}`);
+          console.log(`[Discovery] Found ${brand} device at ${ip}: ${st}`);
 
           discovered.set(ip, {
             ip,
-            name: `LG TV (${ip})`,
-            brand: "lg",
+            name: getDeviceName(brand, ip),
+            brand,
             location,
             serverHeader,
             usn,

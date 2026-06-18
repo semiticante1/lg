@@ -248,10 +248,10 @@ function App() {
     { value: "poweroff", label: "Isključi TV", supportedBrands: ["all"], description: "Isključi uređaj putem dostupnog protokola." },
     { value: "restart", label: "Restart TV", supportedBrands: ["all"], description: "Pošalji restart naredbu ili WOL paket." },
     { value: "launchApp", label: "Otvori aplikaciju / URL", supportedBrands: ["webos"], description: "Pokreni aplikaciju ili otvori URL na webOS uređaju.", requiresParameter: true, parameterLabel: "App ID ili URL" },
-    { value: "mute", label: "Mute zvuk", supportedBrands: ["webos"], description: "Isključi zvuk na webOS uređaju." },
-    { value: "unmute", label: "Unmute zvuk", supportedBrands: ["webos"], description: "Uključi zvuk na webOS uređaju." },
-    { value: "volumeUp", label: "Pojačaj zvuk", supportedBrands: ["webos"], description: "Povećaj glasnoću na webOS uređaju." },
-    { value: "volumeDown", label: "Smanji zvuk", supportedBrands: ["webos"], description: "Smanji glasnoću na webOS uređaju." },
+    { value: "mute", label: "Mute zvuk", supportedBrands: ["webos", "samsung"], description: "Isključi zvuk na podržanom uređaju." },
+    { value: "unmute", label: "Unmute zvuk", supportedBrands: ["webos", "samsung"], description: "Uključi zvuk na podržanom uređaju." },
+    { value: "volumeUp", label: "Pojačaj zvuk", supportedBrands: ["webos", "samsung"], description: "Povećaj glasnoću na podržanom uređaju." },
+    { value: "volumeDown", label: "Smanji zvuk", supportedBrands: ["webos", "samsung"], description: "Smanji glasnoću na podržanom uređaju." },
     { value: "setVolume", label: "Postavi jačinu zvuka", supportedBrands: ["webos"], description: "Postavi preciznu jačinu zvuka 0-100.", requiresParameter: true, parameterLabel: "Volumen 0-100" },
   ];
 
@@ -1010,9 +1010,9 @@ function App() {
       if (data.success && data.devices) {
         setDiscoveredDevices(data.devices);
         if (data.devices.length === 0) {
-          showToast("info", "Skeniranje", "Nisu pronađeni LG TVi na mreži");
+          showToast("info", "Skeniranje", "Nisu pronađeni TV uređaji na mreži");
         } else {
-          showToast("success", "Skeniranje", `Pronađeno ${data.devices.length} LG TV-a`);
+          showToast("success", "Skeniranje", `Pronađeno ${data.devices.length} TV uređaja`);
         }
       }
     } catch (error) {
@@ -1042,10 +1042,10 @@ function App() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              name: device.name || `LG TV (${ip})`,
+              name: device.name || `TV (${ip})`,
               ip: device.ip,
               mac: device.mac || "00:00:00:00:00:00",
-              brand: device.brand || "lg",
+              brand: device.brand || "generic",
               groupId: null,
             }),
           });
@@ -2625,7 +2625,7 @@ function App() {
                     <button type="button" className="action-btn restart-btn" onClick={() => handleRestartDevice(viewModalDeviceInfo.id)}>
                       🔄 Restart
                     </button>
-                    {viewModalDeviceInfo.brand?.toLowerCase() === "webos" && (
+                    {(["webos", "samsung"].includes(viewModalDeviceInfo.brand?.toLowerCase() || "")) && (
                       <>
                         <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "mute"); }}>
                           🔇 Mute
@@ -2868,7 +2868,7 @@ function App() {
       {showDiscoveryModal && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeDiscoveryModal(); }}>
           <div className="modal">
-            <h2>🔍 Skeniraj mrežu za LG TVe</h2>
+            <h2>🔍 Skeniraj mrežu za TV uređaje</h2>
             
             {discoveryLoading ? (
               <div className="discovery-loading">
@@ -2876,11 +2876,11 @@ function App() {
               </div>
             ) : discoveredDevices.length === 0 ? (
               <div className="discovery-empty">
-                <p>Nisu pronađeni LG TVi. Klikni "Skeniraj" da pokušaš ponovo.</p>
+                <p>Nisu pronađeni TV uređaji. Klikni "Skeniraj" da pokušaš ponovo.</p>
               </div>
             ) : (
               <div className="discovery-list">
-                <p>Pronađeno {discoveredDevices.length} TV-a. Odaberi koje želiš dodati:</p>
+                <p>Pronađeno {discoveredDevices.length} uređaja. Odaberi koje želiš dodati:</p>
                 <div className="discovery-devices">
                   {discoveredDevices.map((device) => (
                     <div key={device.ip} className="discovery-device">

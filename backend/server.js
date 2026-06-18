@@ -18,6 +18,9 @@ const {
   setWebosMute,
   adjustWebosVolume,
   setWebosVolume,
+  setSamsungMute,
+  adjustSamsungVolume,
+  setSamsungVolume,
 } = require("./tv-adapter");
 const { discoverLGTVs } = require("./device-discovery");
 
@@ -25,6 +28,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const DB_FILE = path.join(__dirname, "data.db");
 const JSON_FILE = path.join(__dirname, "devices.json");
+
+const getNormalizedBrand = (device) => (device?.brand || "").trim().toLowerCase();
 
 const db = new sqlite3.Database(DB_FILE);
 
@@ -366,6 +371,8 @@ const executeScheduleAction = async (scheduleId) => {
     return;
   }
 
+  const brand = getNormalizedBrand(device);
+
   let actionParams = {};
   try {
     actionParams = schedule.action_params ? JSON.parse(schedule.action_params) : {};
@@ -418,6 +425,7 @@ const executeScheduleAction = async (scheduleId) => {
             await powerOffDevice(device);
             await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
             try { await broadcastDeviceState(device.id); } catch (e) {}
+            break;
           case "restart":
             await wakeDevice(device.mac);
             await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
@@ -427,18 +435,37 @@ const executeScheduleAction = async (scheduleId) => {
             await launchWebosApp(device.ip, params.target || params.appId || params.uri);
             break;
           case "mute":
-            await setWebosMute(device.ip, true);
+            if (brand === "samsung") {
+              await setSamsungMute(device.ip, true);
+            } else {
+              await setWebosMute(device.ip, true);
+            }
             break;
           case "unmute":
-            await setWebosMute(device.ip, false);
+            if (brand === "samsung") {
+              await setSamsungMute(device.ip, false);
+            } else {
+              await setWebosMute(device.ip, false);
+            }
             break;
           case "volumeUp":
-            await adjustWebosVolume(device.ip, "Up");
+            if (brand === "samsung") {
+              await adjustSamsungVolume(device.ip, "Up");
+            } else {
+              await adjustWebosVolume(device.ip, "Up");
+            }
             break;
           case "volumeDown":
-            await adjustWebosVolume(device.ip, "Down");
+            if (brand === "samsung") {
+              await adjustSamsungVolume(device.ip, "Down");
+            } else {
+              await adjustWebosVolume(device.ip, "Down");
+            }
             break;
           case "setVolume":
+            if (brand === "samsung") {
+              throw new Error("Samsung uređaji trenutno ne podržavaju precizno postavljanje volume-a. Koristi volumeUp/volumeDown ili mute.");
+            }
             if (typeof params.volume === "number") {
               await setWebosVolume(device.ip, params.volume);
             }
@@ -488,18 +515,37 @@ const executeScheduleAction = async (scheduleId) => {
       await launchWebosApp(device.ip, actionParams.target || actionParams.appId || actionParams.uri);
       break;
     case "mute":
-      await setWebosMute(device.ip, true);
+      if (brand === "samsung") {
+        await setSamsungMute(device.ip, true);
+      } else {
+        await setWebosMute(device.ip, true);
+      }
       break;
     case "unmute":
-      await setWebosMute(device.ip, false);
+      if (brand === "samsung") {
+        await setSamsungMute(device.ip, false);
+      } else {
+        await setWebosMute(device.ip, false);
+      }
       break;
     case "volumeUp":
-      await adjustWebosVolume(device.ip, "Up");
+      if (brand === "samsung") {
+        await adjustSamsungVolume(device.ip, "Up");
+      } else {
+        await adjustWebosVolume(device.ip, "Up");
+      }
       break;
     case "volumeDown":
-      await adjustWebosVolume(device.ip, "Down");
+      if (brand === "samsung") {
+        await adjustSamsungVolume(device.ip, "Down");
+      } else {
+        await adjustWebosVolume(device.ip, "Down");
+      }
       break;
     case "setVolume":
+      if (brand === "samsung") {
+        throw new Error("Samsung uređaji trenutno ne podržavaju precizno postavljanje volume-a. Koristi volumeUp/volumeDown ili mute.");
+      }
       if (typeof actionParams.volume === "number") {
         await setWebosVolume(device.ip, actionParams.volume);
       }
@@ -582,7 +628,7 @@ app.get("/devices/discover", async (req, res) => {
     }));
 
     console.log(
-      `[Server] Discovery complete. Found ${discoveredDevices.length} LG TVs`
+      `[Server] Discovery complete. Found ${discoveredDevices.length} TV devices`
     );
 
     res.json({
@@ -932,6 +978,7 @@ app.post("/devices/:id/action", async (req, res) => {
     }
 
     const params = action_params || {};
+    const brand = getNormalizedBrand(device);
     switch (action) {
       case "poweron":
         await powerOnDevice(device);
@@ -955,18 +1002,37 @@ app.post("/devices/:id/action", async (req, res) => {
         await launchWebosApp(device.ip, params.target);
         break;
       case "mute":
-        await setWebosMute(device.ip, true);
+        if (brand === "samsung") {
+          await setSamsungMute(device.ip, true);
+        } else {
+          await setWebosMute(device.ip, true);
+        }
         break;
       case "unmute":
-        await setWebosMute(device.ip, false);
+        if (brand === "samsung") {
+          await setSamsungMute(device.ip, false);
+        } else {
+          await setWebosMute(device.ip, false);
+        }
         break;
       case "volumeUp":
-        await adjustWebosVolume(device.ip, "Up");
+        if (brand === "samsung") {
+          await adjustSamsungVolume(device.ip, "Up");
+        } else {
+          await adjustWebosVolume(device.ip, "Up");
+        }
         break;
       case "volumeDown":
-        await adjustWebosVolume(device.ip, "Down");
+        if (brand === "samsung") {
+          await adjustSamsungVolume(device.ip, "Down");
+        } else {
+          await adjustWebosVolume(device.ip, "Down");
+        }
         break;
       case "setVolume":
+        if (brand === "samsung") {
+          return res.status(400).json({ error: "Samsung uređaji trenutno ne podržavaju precizno postavljanje volume-a. Koristi volumeUp/volumeDown ili mute." });
+        }
         if (typeof params.volume !== "number") {
           return res.status(400).json({ error: "setVolume action requires numeric volume." });
         }

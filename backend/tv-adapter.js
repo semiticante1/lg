@@ -309,6 +309,52 @@ const sendSamsungPowerOff = async (ip) =>
     }
   });
 
+const sendSamsungKey = async (ip, key) =>
+  new Promise((resolve) => {
+    if (!ip || !key) {
+      return resolve(false);
+    }
+
+    try {
+      const remote = new SamsungRemote({
+        ip,
+        host: { ip: "127.0.0.1", mac: "00:00:00:00", name: "NodeJS Samsung Remote" },
+      });
+
+      remote.send(key, (error) => {
+        resolve(!error);
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+
+const setSamsungMute = async (ip, muted) => {
+  if (!ip) {
+    return false;
+  }
+
+  // Samsung remotes typically toggle mute with KEY_MUTE.
+  return muted ? sendSamsungKey(ip, "KEY_MUTE") : sendSamsungKey(ip, "KEY_MUTE");
+};
+
+const adjustSamsungVolume = async (ip, direction) => {
+  if (!ip) {
+    return false;
+  }
+
+  const key = direction === "Up" ? "KEY_VOLUP" : "KEY_VOLDOWN";
+  return sendSamsungKey(ip, key);
+};
+
+const setSamsungVolume = async (ip, volume) => {
+  if (!ip || typeof volume !== "number") {
+    return false;
+  }
+
+  return false;
+};
+
 const querySamsungPowerState = async (ip) => {
   const portOpen = await checkTcpPort(ip, 55000, 2000);
   if (portOpen) {
@@ -425,4 +471,7 @@ module.exports = {
   setWebosMute,
   adjustWebosVolume,
   setWebosVolume,
+  setSamsungMute,
+  adjustSamsungVolume,
+  setSamsungVolume,
 };
