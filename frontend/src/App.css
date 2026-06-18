@@ -1320,6 +1320,21 @@ button:disabled {
   appearance: none;
 }
 
+.log-message-content {
+  margin: 0;
+  padding: 14px;
+  max-height: 45vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .modal-buttons {
   display: flex;
   justify-content: flex-end;

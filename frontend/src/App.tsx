@@ -577,6 +577,50 @@ function App() {
   };
 
   const fetchScheduleLogs = async (schedule: DeviceSchedule) => {
+    if (!selectedDeviceId) {
+      showMessage("Greška", "Nema odabranog uređaja.");
+      return;
+    }
+
+    const formatScheduleStatus = (status: string) => {
+      const normalized = String(status || "").toLowerCase();
+      if (normalized === "success") return "Uspješno";
+      if (normalized === "failed") return "Neuspješno";
+      if (normalized === "running") return "U toku";
+      return status || "Nepoznato";
+    };
+
+    const formatScheduleDetails = (details: unknown) => {
+      if (!details) return "Bez dodatnih detalja.";
+
+      const raw = typeof details === "string" ? details : JSON.stringify(details);
+      if (!raw) return "Bez dodatnih detalja.";
+
+      try {
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (typeof parsed.error === "string" && parsed.error.trim()) {
+          return `Greška: ${parsed.error}`;
+        }
+        if (typeof parsed.action === "string" && parsed.action.trim()) {
+          return `Akcija: ${parsed.action}`;
+        }
+        if (typeof parsed.step === "string" && parsed.step.trim()) {
+          return `Korak: ${parsed.step}`;
+        }
+        return JSON.stringify(parsed, null, 2);
+      } catch {
+        return raw;
+      }
+    };
+
+    const formatScheduleTimestamp = (createdAt: string) => {
+      const date = new Date(createdAt);
+      if (Number.isNaN(date.getTime())) {
+        return createdAt;
+      }
+      return date.toLocaleString();
+    };
+
     try {
       const response = await fetch(`${baseUrl}/devices/${selectedDeviceId}/schedules/${schedule.id}/logs`);
       if (!response.ok) {
@@ -588,7 +632,16 @@ function App() {
         showMessage('Logovi', 'Nema zapisa za ovaj raspored.');
         return;
       }
-      const text = data.map((r: any) => `${r.created_at} [${r.status}] ${r.details || ''}`).join('\n\n');
+
+      const text = data
+        .map((run: { created_at?: string; status?: string; details?: unknown }) => {
+          const when = formatScheduleTimestamp(run.created_at || "");
+          const status = formatScheduleStatus(run.status || "");
+          const details = formatScheduleDetails(run.details);
+          return `${when} | ${status}\n${details}`;
+        })
+        .join("\n\n");
+
       showMessage('Logovi rasporeda', text);
     } catch (e) {
       console.error('Dohvat logova nije uspio', e);
@@ -999,14 +1052,74 @@ function App() {
     setSelectedDiscoveredDevices(new Set());
 
     try {
-      const response = await fetch(`${baseUrl}/devices/discover`);
-      if (!response.ok) {
-        showToast("error", "Greška", "Skeniranje nije uspjelo");
-        setDiscoveryLoading(false);
-        return;
+      const retryDelays = [0, 800, 1600];
+      const clickId = `scan-${Date.now()}`;
+
+      const discoverOnce = async (attempt: number) => {
+        const response = await fetch(
+          `${baseUrl}/devices/discover?clickId=${encodeURIComponent(clickId)}&clientAttempt=${attempt + 1}`,
+          {
+            headers: {
+              "X-Discovery-Click-Id": clickId,
+              "X-Discovery-Client-Attempt": String(attempt + 1),
+            },
+          }
+        );
+        const traceId = response.headers.get("X-Discovery-Trace-Id") || "n/a";
+
+        if (!response.ok) {
+          const responseText = await response.text().catch(() => "");
+          let errorMessage = `HTTP ${response.status}`;
+          try {
+            const errorData = JSON.parse(responseText);
+            errorMessage = errorData?.error || errorData?.message || errorMessage;
+          } catch {
+            if (responseText) {
+              errorMessage = responseText;
+            }
+          }
+          console.error(
+            `[Discovery][${clickId}] Attempt ${attempt + 1} failed. status=${response.status}, traceId=${traceId}, error=${errorMessage}`
+          );
+          throw new Error(`[trace ${traceId}] ${errorMessage}`);
+        }
+
+        const data = await response.json();
+        if (!data?.success) {
+          const message = data?.error || "Discovery request failed";
+          console.error(
+            `[Discovery][${clickId}] Attempt ${attempt + 1} returned unsuccessful payload. traceId=${data?.traceId || traceId}, error=${message}`
+          );
+          throw new Error(`[trace ${data?.traceId || traceId}] ${message}`);
+        }
+
+        console.info(
+          `[Discovery][${clickId}] Attempt ${attempt + 1} success. traceId=${data?.traceId || traceId}, count=${Array.isArray(data?.devices) ? data.devices.length : 0}`
+        );
+
+        return data;
+      };
+
+      let data: { success: boolean; devices?: Array<{ ip: string }>; error?: string } | null = null;
+      let lastError: unknown = null;
+
+      for (let attempt = 0; attempt < retryDelays.length; attempt++) {
+        try {
+          if (retryDelays[attempt] > 0) {
+            await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+          }
+          data = await discoverOnce(attempt);
+          break;
+        } catch (attemptError) {
+          lastError = attemptError;
+          console.warn(`[Discovery][${clickId}] Skeniranje nije uspjelo (pokušaj ${attempt + 1}/${retryDelays.length})`, attemptError);
+        }
       }
 
-      const data = await response.json();
+      if (!data) {
+        throw lastError || new Error("Skeniranje nije uspjelo");
+      }
+
       if (data.success && data.devices) {
         setDiscoveredDevices(data.devices);
         if (data.devices.length === 0) {
@@ -1981,7 +2094,11 @@ function App() {
               <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setMessageModal(null); }}>
                 <div className="modal">
                   <h2>{messageModal.title}</h2>
-                  <p>{messageModal.message}</p>
+                  {messageModal.title.toLowerCase().includes("log") ? (
+                    <pre className="log-message-content">{messageModal.message}</pre>
+                  ) : (
+                    <p>{messageModal.message}</p>
+                  )}
                   <div className="modal-buttons">
                     {messageModal.onConfirm ? (
                       <>

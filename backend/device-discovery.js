@@ -36,12 +36,26 @@ const getDeviceName = (brand, ip) => {
  * Discover TVs on the network using SSDP
  * Returns array of discovered devices with IP, MAC (if available), and UPnP info
  */
-const discoverLGTVs = async (timeoutMs = 5000) => {
+const discoverLGTVs = async (timeoutMs = 5000, options = {}) => {
   return new Promise((resolve, reject) => {
     try {
+      const traceId = options.traceId || `disc-${Date.now()}`;
       const discovered = new Map(); // Use Map to avoid duplicates by IP
       const client = new Client();
       let resolved = false;
+      const startedAt = Date.now();
+      let responseCount = 0;
+      let firstResponseAt = null;
+
+      const stopAndReject = (error) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timer);
+        try {
+          client.stop();
+        } catch (e) {}
+        reject(error);
+      };
 
       // Set a timeout to stop searching and return results
       const timer = setTimeout(() => {
@@ -52,12 +66,23 @@ const discoverLGTVs = async (timeoutMs = 5000) => {
         } catch (e) {
           console.log("[Discovery] Error stopping client:", e.message);
         }
-        console.log(`[Discovery] Timeout reached. Found ${discovered.size} devices`);
+        const elapsedMs = Date.now() - startedAt;
+        console.log(
+          `[Discovery][${traceId}] Timeout reached after ${elapsedMs}ms. SSDP responses=${responseCount}, TVs=${discovered.size}`
+        );
         resolve(Array.from(discovered.values()));
       }, timeoutMs);
 
       client.on("response", (headers, statusCode, rinfo) => {
         try {
+          responseCount += 1;
+          if (!firstResponseAt) {
+            firstResponseAt = Date.now();
+            console.log(
+              `[Discovery][${traceId}] First SSDP response after ${firstResponseAt - startedAt}ms from ${rinfo?.address || "unknown"}`
+            );
+          }
+
           const location = headers.LOCATION;
           const serverHeader = headers.SERVER || "";
           const usn = headers.USN || "";
@@ -84,7 +109,7 @@ const discoverLGTVs = async (timeoutMs = 5000) => {
           const st = headers.ST || "";
           const brand = detectBrand(location, serverHeader, usn, deviceType);
 
-          console.log(`[Discovery] Found ${brand} device at ${ip}: ${st}`);
+          console.log(`[Discovery][${traceId}] Found ${brand} device at ${ip}: ${st}`);
 
           discovered.set(ip, {
             ip,
@@ -103,28 +128,48 @@ const discoverLGTVs = async (timeoutMs = 5000) => {
       });
 
       client.on("error", (error) => {
-        console.error("[Discovery] SSDP Client error:", error.message);
+        const elapsedMs = Date.now() - startedAt;
+        console.error(
+          `[Discovery][${traceId}] SSDP Client error after ${elapsedMs}ms:`,
+          error.message
+        );
         if (resolved) return;
         resolved = true;
         clearTimeout(timer);
         try {
           client.stop();
         } catch (e) {}
+        console.warn(
+          `[Discovery][${traceId}] Resolving with partial results after SSDP error. responses=${responseCount}, TVs=${discovered.size}`
+        );
         resolve(Array.from(discovered.values()));
       });
 
-      // Start searching for all devices
-      try {
-        console.log("[Discovery] Starting SSDP search for all devices...");
-        client.search("ssdp:all");
-      } catch (error) {
-        console.error("[Discovery] Error starting SSDP search:", error.message);
-        if (!resolved) {
-          resolved = true;
-          clearTimeout(timer);
-          reject(error);
+      const searchTargets = [
+        "ssdp:all",
+        "urn:schemas-upnp-org:device:MediaRenderer:1",
+      ];
+
+      const startSearch = (attempt = 1) => {
+        try {
+          console.log(`[Discovery][${traceId}] Starting SSDP search (attempt ${attempt})...`);
+          for (const target of searchTargets) {
+            console.log(`[Discovery][${traceId}] -> search target: ${target}`);
+            client.search(target);
+          }
+        } catch (error) {
+          console.error(`[Discovery][${traceId}] Error starting SSDP search (attempt ${attempt}):`, error.message);
+          if (attempt < 3) {
+            const retryDelay = 350 * attempt;
+            setTimeout(() => startSearch(attempt + 1), retryDelay);
+            return;
+          }
+          stopAndReject(error);
         }
-      }
+      };
+
+      // Let sockets initialize before first search; this avoids first-click failures on some systems.
+      setTimeout(() => startSearch(1), 150);
     } catch (error) {
       console.error("[Discovery] Unexpected error:", error.message);
       reject(error);

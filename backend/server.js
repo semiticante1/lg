@@ -607,12 +607,27 @@ app.get("/devices", async (req, res) => {
 
 // Device discovery endpoint using SSDP
 app.get("/devices/discover", async (req, res) => {
-  try {
-    console.log("[Server] Starting SSDP device discovery...");
-    res.setHeader("Content-Type", "application/json");
+  const traceId = `disc-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const startedAt = Date.now();
 
-    // Start discovery, it will take a few seconds
-    const discoveredDevices = await discoverLGTVs(5000); // 5 second timeout
+  try {
+    console.log(
+      `[Server][${traceId}] Discovery request started. ip=${req.ip || "unknown"}, ua=${req.get("user-agent") || "unknown"}, clickId=${req.query.clickId || "n/a"}, clientAttempt=${req.query.clientAttempt || "n/a"}`
+    );
+    res.setHeader("Content-Type", "application/json");
+    res.setHeader("X-Discovery-Trace-Id", traceId);
+
+    // First SSDP call can occasionally fail on some networks, so retry once.
+    let discoveredDevices = [];
+    try {
+      discoveredDevices = await discoverLGTVs(5000, { traceId: `${traceId}-run1` });
+    } catch (firstDiscoveryError) {
+      console.warn(
+        `[Server][${traceId}] First discovery attempt failed, retrying once:`,
+        firstDiscoveryError?.message || firstDiscoveryError
+      );
+      discoveredDevices = await discoverLGTVs(5000, { traceId: `${traceId}-run2` });
+    }
 
     // Get list of already added devices to mark duplicates
     const existingIPs = new Set();
@@ -627,19 +642,23 @@ app.get("/devices/discover", async (req, res) => {
       already_added: existingIPs.has(device.ip),
     }));
 
+    const elapsedMs = Date.now() - startedAt;
     console.log(
-      `[Server] Discovery complete. Found ${discoveredDevices.length} TV devices`
+      `[Server][${traceId}] Discovery complete in ${elapsedMs}ms. Found ${discoveredDevices.length} TV devices`
     );
 
     res.json({
       success: true,
+      traceId,
       count: devicesWithStatus.length,
       devices: devicesWithStatus,
     });
   } catch (error) {
-    console.error("[Server] Discovery error:", error);
+    const elapsedMs = Date.now() - startedAt;
+    console.error(`[Server][${traceId}] Discovery error after ${elapsedMs}ms:`, error);
     res.status(500).json({
       success: false,
+      traceId,
       error: error.message,
       devices: [],
     });
@@ -923,7 +942,6 @@ app.post('/devices/:id/schedules/:scheduleId/trigger', async (req, res) => {
 
 app.get('/devices/:id/schedules/:scheduleId/logs', async (req, res) => {
   try {
-    console.log('HANDLER --> logs', req.params);
     const rows = await allAsync(`SELECT * FROM schedule_runs WHERE schedule_id = ? ORDER BY id DESC LIMIT 50`, [req.params.scheduleId]);
     res.json(rows);
   } catch (error) {
