@@ -1,44 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import ScheduleBuilderModal from "./components/ScheduleBuilderModal";
-
-interface Device {
-  id: number;
-  name: string;
-  ip: string;
-  mac: string;
-  brand: string;
-  status: string;
-  powerState: string;
-  selected: boolean;
-  groupId: number | null;
-  groupName?: string | null;
-  created_at?: string;
-  last_active_at?: string;
-}
-
-interface Group {
-  id: number;
-  name: string;
-  deviceCount: number;
-}
-
-interface DeviceHistoryEntry {
-  timestamp: string;
-  time: number;
-  status: string;
-  note: string;
-}
-
-interface DeviceSchedule {
-  id: number;
-  device_id: number;
-  cron: string;
-  action: string;
-  action_params: Record<string, any>;
-  description: string | null;
-  enabled: boolean;
-}
+import DeviceDiscoveryModal from "./components/DeviceDiscoveryModal";
+import DeviceEditorModal from "./components/DeviceEditorModal";
+import ToastContainer from "./components/ToastContainer";
+import type {
+  Device,
+  AuditLogEntry,
+  DeviceHistoryEntry,
+  DeviceSchedule,
+  DiscoveredDevice,
+  Group,
+  MessageModalState,
+  ToastMessage,
+} from "./types/app";
+import {
+  formatPowerText,
+  formatStatusText,
+  isValidIp,
+  isValidMac,
+} from "./utils/device";
+import {
+  getActionLabel,
+  getAvailableActionsForDevice,
+  isCronValid,
+  normalizeCronExpression,
+} from "./utils/schedule";
 
 function App() {
   const [activePage, setActivePage] = useState("devices");
@@ -81,7 +68,11 @@ function App() {
   const [backendUrl, setBackendUrl] = useState("http://localhost:5000");
   const [schedulerOn, setSchedulerOn] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
-  const [toastMessages, setToastMessages] = useState<Array<{id: string, type: 'info' | 'success' | 'error', title: string, message: string}>>([]);
+  const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditDeviceFilter, setAuditDeviceFilter] = useState<string>("all");
+  const [auditGroupFilter, setAuditGroupFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
   // @ts-ignore - unused but may be needed for future use
   const [_tableLoading, _setTableLoading] = useState(false);
@@ -92,16 +83,10 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignGroupModal, setShowAssignGroupModal] = useState(false);
   const [selectedAssignGroupId, setSelectedAssignGroupId] = useState<number | null>(null);
-  const [messageModal, setMessageModal] = useState<{
-    title: string;
-    message: string;
-    confirmText?: string;
-    cancelText?: string;
-    onConfirm?: () => Promise<void> | void;
-  } | null>(null);
+  const [messageModal, setMessageModal] = useState<MessageModalState | null>(null);
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
   const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
-  const [discoveredDevices, setDiscoveredDevices] = useState<any[]>([]);
+  const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredDevice[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [selectedDiscoveredDevices, setSelectedDiscoveredDevices] = useState<Set<string>>(new Set());
 
@@ -138,6 +123,29 @@ function App() {
     initialLoadRef.current = true;
     refreshAll();
   }, []);
+
+  const loadAuditLogs = async (deviceId?: string, groupId?: string) => {
+    setAuditLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "300");
+      if (deviceId && deviceId !== "all") {
+        params.set("deviceId", deviceId);
+      }
+      if (groupId && groupId !== "all") {
+        params.set("groupId", groupId);
+      }
+
+      const response = await fetch(`${baseUrl}/audit-logs?${params.toString()}`);
+      const data = await response.json();
+      setAuditLogs(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Učitavanje audit loga nije uspjelo:", error);
+      setAuditLogs([]);
+    } finally {
+      setAuditLoading(false);
+    }
+  };
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -186,7 +194,7 @@ function App() {
 
   const refreshAll = async () => {
     setLoading(true);
-    await Promise.all([loadDevices(), loadGroups()]);
+    await Promise.all([loadDevices(), loadGroups(), loadAuditLogs(auditDeviceFilter, auditGroupFilter)]);
     setLoading(false);
     setLastRefresh(new Date().toLocaleTimeString());
     setStatusMessage("Status osvježen");
@@ -243,28 +251,7 @@ function App() {
 
   const getDeviceSchedules = (deviceId: number) => deviceSchedules[deviceId] || [];
 
-  const scheduleActions = [
-    { value: "poweron", label: "Uključi TV", supportedBrands: ["all"], description: "Uključi uređaj pomoću WOL ili branda." },
-    { value: "poweroff", label: "Isključi TV", supportedBrands: ["all"], description: "Isključi uređaj putem dostupnog protokola." },
-    { value: "restart", label: "Restart TV", supportedBrands: ["all"], description: "Pošalji restart naredbu ili WOL paket." },
-    { value: "launchApp", label: "Otvori aplikaciju / URL", supportedBrands: ["webos"], description: "Pokreni aplikaciju ili otvori URL na webOS uređaju.", requiresParameter: true, parameterLabel: "App ID ili URL" },
-    { value: "mute", label: "Mute zvuk", supportedBrands: ["webos", "samsung"], description: "Isključi zvuk na podržanom uređaju." },
-    { value: "unmute", label: "Unmute zvuk", supportedBrands: ["webos", "samsung"], description: "Uključi zvuk na podržanom uređaju." },
-    { value: "volumeUp", label: "Pojačaj zvuk", supportedBrands: ["webos", "samsung"], description: "Povećaj glasnoću na podržanom uređaju." },
-    { value: "volumeDown", label: "Smanji zvuk", supportedBrands: ["webos", "samsung"], description: "Smanji glasnoću na podržanom uređaju." },
-    { value: "setVolume", label: "Postavi jačinu zvuka", supportedBrands: ["webos"], description: "Postavi preciznu jačinu zvuka 0-100.", requiresParameter: true, parameterLabel: "Volumen 0-100" },
-  ];
-
-  const getAvailableActions = (device: Device | null) => {
-    if (!device) {
-      return scheduleActions;
-    }
-
-    const brand = device.brand?.toLowerCase() || "generic";
-    return scheduleActions.filter((action) =>
-      action.supportedBrands.includes("all") || action.supportedBrands.includes(brand)
-    );
-  };
+  const getAvailableActions = getAvailableActionsForDevice;
 
   const clearScheduleForm = () => {
     setScheduleCron("0 7 * * *");
@@ -276,61 +263,6 @@ function App() {
     setScheduleSequence([]);
     setScheduleUseTime(false);
     setScheduleTime("");
-  };
-
-  const normalizeCronExpression = (expression: string) => {
-    const trimmed = expression.trim();
-    const timePattern = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-    if (timePattern.test(trimmed)) {
-      const match = trimmed.match(timePattern);
-      if (!match) return null;
-      const [, hour, minute] = match;
-      return `${minute} ${hour} * * *`;
-    }
-
-    const parts = trimmed.split(/\s+/);
-    if (parts.length < 5 || parts.length > 6) {
-      return null;
-    }
-
-    return trimmed;
-  };
-
-  const isCronValid = (expression: string) => {
-    const normalized = normalizeCronExpression(expression);
-    if (!normalized) {
-      return false;
-    }
-
-    const parts = normalized.split(/\s+/);
-    const fieldPattern = /^([*]|[0-9]|[1-5]?[0-9]|[1-2]?[0-9]|[1-3]?[0-9]|[1-7]|[0-9]-[0-9]|[0-9](,\s*[0-9])*(\/\d+)?|\*[\/][0-9]+|[0-9]+-[0-9]+(\/\d+)?)$/;
-    return parts.every((field) => fieldPattern.test(field) || field.includes("*") || field.includes("/") || field.includes(",") || field.includes("-"));
-  };
-
-
-  const getActionLabel = (action: string) => {
-    switch (action) {
-      case "poweron":
-        return "Uključi TV";
-      case "poweroff":
-        return "Isključi TV";
-      case "restart":
-        return "Restart TV";
-      case "launchApp":
-        return "Otvori aplikaciju / URL";
-      case "mute":
-        return "Mute zvuk";
-      case "unmute":
-        return "Unmute zvuk";
-      case "volumeUp":
-        return "Pojačaj zvuk";
-      case "volumeDown":
-        return "Smanji zvuk";
-      case "setVolume":
-        return "Postavi jačinu zvuka";
-      default:
-        return action;
-    }
   };
 
   const cronValid = isCronValid(scheduleCron);
@@ -759,12 +691,6 @@ function App() {
     setDeviceBrand("generic");
     setModalGroupId(null);
   };
-
-  const isValidIp = (ip: string) =>
-    /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(ip);
-
-  const isValidMac = (mac: string) =>
-    /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(mac);
 
   const showToast = (type: 'info' | 'success' | 'error', title: string, message: string) => {
     const id = Date.now().toString();
@@ -1581,6 +1507,20 @@ function App() {
     setShowModal(true);
   };
 
+  const handleOpenAuditForDevice = async (deviceId: number) => {
+    setAuditDeviceFilter(String(deviceId));
+    setAuditGroupFilter("all");
+    setActivePage("audit");
+    await loadAuditLogs(String(deviceId), "all");
+  };
+
+  const handleOpenAuditForGroup = async (groupId: number) => {
+    setAuditGroupFilter(String(groupId));
+    setAuditDeviceFilter("all");
+    setActivePage("audit");
+    await loadAuditLogs("all", String(groupId));
+  };
+
   const filteredDevices = devices.filter((device) => {
     const matchesSearch =
       device.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -1677,7 +1617,7 @@ function App() {
   const dashboardInsights = [
     `Najviše offline ima ${groupHealth[0]?.name || "nijedna grupa"} (${groupHealth[0]?.offlineCount || 0}).`,
     `U mreži je ${unassignedCount} uređaja bez grupe.`,
-    `Posljednjih 8 događaja: ${recentOfflineEvents} offline zapisa.`,
+    `Posljednja 4 događaja: ${recentOfflineEvents} offline zapisa.`,
   ];
 
   const onlineCount = devices.filter((device) => device.status === "Online").length;
@@ -1690,18 +1630,6 @@ function App() {
   const criticalOfflineDevices = devices.filter((device) => device.status === "Offline").slice(0, 3);
   const hasCritical = offlineCount > 0;
 
-  const formatStatusText = (status: string) => {
-    if (status === "Online") return "Na mreži";
-    if (status === "Offline") return "Van mreže";
-    return status;
-  };
-
-  const formatPowerText = (powerState: string) => {
-    if (powerState === "On") return "Uključen";
-    if (powerState === "Off") return "Ugašen";
-    return powerState;
-  };
-
   return (
     <div className={`app theme-${theme}`}>
       <aside className="sidebar">
@@ -1710,6 +1638,7 @@ function App() {
           <p className={activePage === "dashboard" ? "active" : ""} onClick={() => setActivePage("dashboard")}>📊 Početna</p>
           <p className={activePage === "devices" ? "active" : ""} onClick={() => setActivePage("devices")}>📺 Uređaji</p>
           <p className={activePage === "groups" ? "active" : ""} onClick={() => setActivePage("groups")}>👥 Grupe</p>
+          <p className={activePage === "audit" ? "active" : ""} onClick={() => setActivePage("audit")}>📜 Audit log</p>
           <p className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")}>⚙️ Postavke</p>
         </div>
       </aside>
@@ -1967,9 +1896,107 @@ function App() {
                     >
                       Isključi grupu
                     </button>
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={() => handleOpenAuditForGroup(group.id)}
+                    >
+                      Audit log
+                    </button>
                   </div>
                 </div>
               ))}
+            </div>
+          </>
+        )}
+
+        {activePage === "audit" && (
+          <>
+            <h1>Audit log</h1>
+            <p className="page-description">
+              Pregled akcija po uređaju i grupi: ko je pokrenuo, kada je pokrenuto i kakav je ishod.
+            </p>
+
+            <div className="filters">
+              <select
+                className="small-select select-box"
+                value={auditDeviceFilter}
+                onChange={(e) => setAuditDeviceFilter(e.target.value)}
+              >
+                <option value="all">Svi uređaji</option>
+                {devices.map((device) => (
+                  <option key={device.id} value={String(device.id)}>
+                    {device.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="small-select select-box"
+                value={auditGroupFilter}
+                onChange={(e) => setAuditGroupFilter(e.target.value)}
+              >
+                <option value="all">Sve grupe</option>
+                {groups.map((group) => (
+                  <option key={group.id} value={String(group.id)}>
+                    {group.name}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                type="button"
+                className="refresh-btn"
+                onClick={() => loadAuditLogs(auditDeviceFilter, auditGroupFilter)}
+                disabled={auditLoading}
+              >
+                {auditLoading ? "Učitavam..." : "Osvježi audit"}
+              </button>
+            </div>
+
+            <div className="table-wrapper">
+              <table className="device-table">
+                <thead>
+                  <tr>
+                    <th>Vrijeme</th>
+                    <th>Ko/Izvor</th>
+                    <th>Akcija</th>
+                    <th>Uređaj</th>
+                    <th>Grupa</th>
+                    <th>Ishod</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.length === 0 ? (
+                    <tr className="empty-row">
+                      <td colSpan={6}>Nema audit zapisa za odabrani filter.</td>
+                    </tr>
+                  ) : (
+                    auditLogs.map((entry) => {
+                      const deviceName = entry.device_id
+                        ? devices.find((d) => d.id === entry.device_id)?.name || `Uređaj ${entry.device_id}`
+                        : "-";
+                      const groupName = entry.group_id
+                        ? groups.find((g) => g.id === entry.group_id)?.name || `Grupa ${entry.group_id}`
+                        : "-";
+                      return (
+                        <tr key={entry.id}>
+                          <td>{new Date(entry.created_at).toLocaleString()}</td>
+                          <td>{entry.source || "system"}</td>
+                          <td>{entry.action}</td>
+                          <td>{deviceName}</td>
+                          <td>{groupName}</td>
+                          <td>
+                            <span className={entry.status.includes("success") ? "status-online" : "status-offline"}>
+                              {entry.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
           </>
         )}
@@ -2366,6 +2393,7 @@ function App() {
                                     setShowModal(true);
                                     setOpenDropdownId(null);
                                   }}><span className="dropdown-item-icon">✏️</span> Uredi</button>
+                                  <button type="button" className="dropdown-item" onClick={() => { handleOpenAuditForDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">📜</span> Audit log</button>
                                   <button type="button" className="dropdown-item" onClick={() => { handleRestartDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🔄</span> Restart</button>
                                   <button type="button" className="dropdown-item" onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🗑️</span> Obriši</button>
                                 </div>
@@ -2921,135 +2949,41 @@ function App() {
         )}
       </main>
 
-      {showModal && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}>
-          <div className="modal">
-            <h2>{editingId !== null ? "Uredi uredaj" : "Dodaj uredaj"}</h2>
-
-            <input
-              value={deviceName}
-              onChange={(e) => setDeviceName(e.target.value)}
-              placeholder="Naziv uređaja"
-            />
-            <input
-              value={deviceIp}
-              onChange={(e) => setDeviceIp(e.target.value)}
-              placeholder="IP adresa"
-            />
-            <input
-              value={deviceMac}
-              onChange={(e) => setDeviceMac(e.target.value)}
-              placeholder="MAC adresa"
-            />
-            <select
-              value={deviceBrand}
-              onChange={(e) => setDeviceBrand(e.target.value)}
-            >
-              <option value="generic">Generic</option>
-              <option value="webos">LG webOS</option>
-              <option value="samsung">Samsung</option>
-            </select>
-            <select
-              value={modalGroupId ?? ""}
-              onChange={(e) =>
-                setModalGroupId(
-                  e.target.value ? Number(e.target.value) : null
-                )
-              }
-            >
-              <option value="">Bez grupe</option>
-              {groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-
-            <div className="modal-buttons">
-              <button type="button" onClick={() => setShowModal(false)}>Otkaži</button>
-              <button type="button" className="discover-btn" onClick={() => { setShowModal(false); setShowDiscoveryModal(true); }}>
-                🔍 Skeniraj TVe
-              </button>
-              <button type="button" className="save-btn" onClick={handleSave}>
-                Spremi
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeviceEditorModal
+        isOpen={showModal}
+        editingId={editingId}
+        deviceName={deviceName}
+        deviceIp={deviceIp}
+        deviceMac={deviceMac}
+        deviceBrand={deviceBrand}
+        modalGroupId={modalGroupId}
+        groups={groups}
+        onDeviceNameChange={setDeviceName}
+        onDeviceIpChange={setDeviceIp}
+        onDeviceMacChange={setDeviceMac}
+        onDeviceBrandChange={setDeviceBrand}
+        onModalGroupIdChange={setModalGroupId}
+        onClose={() => setShowModal(false)}
+        onOpenDiscovery={() => {
+          setShowModal(false);
+          setShowDiscoveryModal(true);
+        }}
+        onSave={handleSave}
+      />
 
       {loading && <div className="loading-overlay">Osvježavanje...</div>}
       {statusMessage && <div className="status-message">{statusMessage}</div>}
       
-      {/* Device Discovery Modal */}
-      {showDiscoveryModal && (
-        <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeDiscoveryModal(); }}>
-          <div className="modal">
-            <h2>🔍 Skeniraj mrežu za TV uređaje</h2>
-            
-            {discoveryLoading ? (
-              <div className="discovery-loading">
-                <p>Skeniram mrežu... Molim čekaj (~5 sekundi)...</p>
-              </div>
-            ) : discoveredDevices.length === 0 ? (
-              <div className="discovery-empty">
-                <p>Nisu pronađeni TV uređaji. Klikni "Skeniraj" da pokušaš ponovo.</p>
-              </div>
-            ) : (
-              <div className="discovery-list">
-                <p>Pronađeno {discoveredDevices.length} uređaja. Odaberi koje želiš dodati:</p>
-                <div className="discovery-devices">
-                  {discoveredDevices.map((device) => (
-                    <div key={device.ip} className="discovery-device">
-                      <input
-                        type="checkbox"
-                        id={`device-${device.ip}`}
-                        checked={selectedDiscoveredDevices.has(device.ip)}
-                        onChange={(e) => {
-                          const newSelected = new Set(selectedDiscoveredDevices);
-                          if (e.target.checked) {
-                            newSelected.add(device.ip);
-                          } else {
-                            newSelected.delete(device.ip);
-                          }
-                          setSelectedDiscoveredDevices(newSelected);
-                        }}
-                      />
-                      <label htmlFor={`device-${device.ip}`}>
-                        <div>
-                          <strong>{device.name}</strong>
-                          {device.already_added && <span className="badge-added">✓ Već dodan</span>}
-                        </div>
-                        <small>{device.ip}</small>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="modal-buttons">
-              <button type="button" onClick={closeDiscoveryModal}>Otkaži</button>
-              <button 
-                type="button" 
-                className="discover-btn" 
-                onClick={handleStartDiscovery}
-                disabled={discoveryLoading}
-              >
-                {discoveryLoading ? "Skeniram..." : "🔄 Skeniraj ponovo"}
-              </button>
-              <button 
-                type="button" 
-                className="save-btn" 
-                onClick={handleAddDiscoveredDevices}
-                disabled={selectedDiscoveredDevices.size === 0 || discoveryLoading}
-              >
-                ✅ Dodaj ({selectedDiscoveredDevices.size})
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeviceDiscoveryModal
+        isOpen={showDiscoveryModal}
+        discoveryLoading={discoveryLoading}
+        discoveredDevices={discoveredDevices}
+        selectedDiscoveredDevices={selectedDiscoveredDevices}
+        onClose={closeDiscoveryModal}
+        onRetryDiscovery={handleStartDiscovery}
+        onAddSelected={handleAddDiscoveredDevices}
+        onSelectionChange={setSelectedDiscoveredDevices}
+      />
 
       {/* Schedule Builder Modal */}
       <ScheduleBuilderModal
@@ -3062,17 +2996,7 @@ function App() {
         deviceName={selectedDevice?.name || "Uređaj"}
       />
       
-      {/* Toast Notifications */}
-      <div className="toast-container">
-        {toastMessages.map((toast) => (
-          <div key={toast.id} className={`toast toast-${toast.type}`}>
-            <div className="toast-content">
-              <strong>{toast.title}</strong>
-              <p>{toast.message}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+      <ToastContainer messages={toastMessages} />
     </div>
   );
 }

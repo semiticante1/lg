@@ -66,6 +66,24 @@ const getAsync = (sql, params = []) =>
     });
   });
 
+const safeJsonParse = (value, fallback = {}) => {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+
+  if (typeof value === "object") {
+    return value;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch {
+    return fallback;
+  }
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 // WebSocket server will be initialized after HTTP server starts
 let wss = null;
 
@@ -134,6 +152,36 @@ async function initDatabase() {
       details TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(schedule_id) REFERENCES device_schedules(id) ON DELETE CASCADE
+    )`
+  );
+
+  await runAsync(
+    `CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type TEXT,
+      entity_id INTEGER,
+      device_id INTEGER,
+      group_id INTEGER,
+      schedule_id INTEGER,
+      action TEXT NOT NULL,
+      status TEXT NOT NULL,
+      source TEXT,
+      details TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`
+  );
+
+  await runAsync(
+    `CREATE TABLE IF NOT EXISTS scenes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      target_type TEXT NOT NULL DEFAULT 'group',
+      target_id INTEGER,
+      steps_json TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     )`
   );
 
@@ -355,6 +403,235 @@ const loadScheduleTasks = async () => {
   schedules.forEach(registerScheduleTask);
 };
 
+const writeAuditLog = async ({
+  entityType = null,
+  entityId = null,
+  deviceId = null,
+  groupId = null,
+  scheduleId = null,
+  action,
+  status,
+  source = null,
+  details = null,
+}) => {
+  try {
+    await runAsync(
+      `INSERT INTO audit_logs (entity_type, entity_id, device_id, group_id, schedule_id, action, status, source, details)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        entityType,
+        entityId,
+        deviceId,
+        groupId,
+        scheduleId,
+        action,
+        status,
+        source,
+        details ? JSON.stringify(details) : null,
+      ]
+    );
+  } catch (error) {
+    console.warn("Failed to write audit log:", error.message);
+  }
+};
+
+const resolveRollbackStep = (action, params = {}) => {
+  switch (action) {
+    case "poweron":
+      return { action: "poweroff", action_params: {} };
+    case "poweroff":
+      return { action: "poweron", action_params: {} };
+    case "mute":
+      return { action: "unmute", action_params: {} };
+    case "unmute":
+      return { action: "mute", action_params: {} };
+    case "volumeUp":
+      return { action: "volumeDown", action_params: {} };
+    case "volumeDown":
+      return { action: "volumeUp", action_params: {} };
+    case "setVolume":
+      if (typeof params.rollbackVolume === "number") {
+        return { action: "setVolume", action_params: { volume: params.rollbackVolume } };
+      }
+      return null;
+    default:
+      return null;
+  }
+};
+
+const executeDeviceAction = async (device, action, params = {}) => {
+  const brand = getNormalizedBrand(device);
+
+  switch (action) {
+    case "poweron": {
+      const ok = await powerOnDevice(device);
+      if (!ok) {
+        throw new Error("Power on did not confirm");
+      }
+      await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+      try { await broadcastDeviceState(device.id); } catch (e) {}
+      return { success: true };
+    }
+    case "poweroff": {
+      const result = await powerOffDevice(device);
+      if (!result.success) {
+        throw new Error(result.reason || "Power off failed");
+      }
+      await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
+      try { await broadcastDeviceState(device.id); } catch (e) {}
+      return { success: true, method: result.method };
+    }
+    case "restart": {
+      const ok = await wakeDevice(device.mac);
+      if (!ok) {
+        throw new Error("Restart wake signal failed");
+      }
+      await runAsync(`UPDATE devices SET status = 'Online', power_state = 'On' WHERE id = ?`, [device.id]);
+      try { await broadcastDeviceState(device.id); } catch (e) {}
+      return { success: true };
+    }
+    case "launchApp": {
+      const target = params.target || params.appId || params.uri;
+      if (!target) {
+        throw new Error("launchApp requires target");
+      }
+      const ok = await launchWebosApp(device.ip, target);
+      if (!ok) {
+        throw new Error("launchApp failed");
+      }
+      return { success: true };
+    }
+    case "mute": {
+      const ok = brand === "samsung" ? await setSamsungMute(device.ip, true) : await setWebosMute(device.ip, true);
+      if (!ok) {
+        throw new Error("Mute failed");
+      }
+      return { success: true };
+    }
+    case "unmute": {
+      const ok = brand === "samsung" ? await setSamsungMute(device.ip, false) : await setWebosMute(device.ip, false);
+      if (!ok) {
+        throw new Error("Unmute failed");
+      }
+      return { success: true };
+    }
+    case "volumeUp": {
+      const ok = brand === "samsung" ? await adjustSamsungVolume(device.ip, "Up") : await adjustWebosVolume(device.ip, "Up");
+      if (!ok) {
+        throw new Error("Volume up failed");
+      }
+      return { success: true };
+    }
+    case "volumeDown": {
+      const ok = brand === "samsung" ? await adjustSamsungVolume(device.ip, "Down") : await adjustWebosVolume(device.ip, "Down");
+      if (!ok) {
+        throw new Error("Volume down failed");
+      }
+      return { success: true };
+    }
+    case "setVolume": {
+      if (brand === "samsung") {
+        throw new Error("Samsung uređaji trenutno ne podržavaju precizno setVolume.");
+      }
+      if (typeof params.volume !== "number") {
+        throw new Error("setVolume requires numeric volume");
+      }
+      const ok = await setWebosVolume(device.ip, params.volume);
+      if (!ok) {
+        throw new Error("setVolume failed");
+      }
+      return { success: true };
+    }
+    default:
+      throw new Error(`Unknown action: ${action}`);
+  }
+};
+
+const executeWithRetryAndRollback = async ({
+  device,
+  action,
+  params = {},
+  retryCount = 1,
+  retryDelayMs = 1000,
+  rollbackOnFail = false,
+  source = "api",
+  scheduleId = null,
+  groupId = null,
+  entityType = "device",
+  entityId = null,
+}) => {
+  const attempts = Math.max(1, Number(retryCount || 0) + 1);
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await executeDeviceAction(device, action, params);
+      await writeAuditLog({
+        entityType,
+        entityId: entityId ?? device.id,
+        deviceId: device.id,
+        groupId,
+        scheduleId,
+        action,
+        status: "success",
+        source,
+        details: { attempt, attempts, params },
+      });
+      return { success: true, attempts: attempt };
+    } catch (error) {
+      lastError = error;
+      await writeAuditLog({
+        entityType,
+        entityId: entityId ?? device.id,
+        deviceId: device.id,
+        groupId,
+        scheduleId,
+        action,
+        status: "failed-attempt",
+        source,
+        details: { attempt, attempts, error: error.message, params },
+      });
+      if (attempt < attempts) {
+        await sleep(Number(retryDelayMs) || 1000);
+      }
+    }
+  }
+
+  if (rollbackOnFail) {
+    const rollbackStep = resolveRollbackStep(action, params);
+    if (rollbackStep) {
+      try {
+        await executeDeviceAction(device, rollbackStep.action, rollbackStep.action_params || {});
+        await writeAuditLog({
+          entityType,
+          entityId: entityId ?? device.id,
+          deviceId: device.id,
+          groupId,
+          scheduleId,
+          action: `${action}:rollback`,
+          status: "success",
+          source,
+          details: { rollbackAction: rollbackStep.action },
+        });
+      } catch (rollbackError) {
+        await writeAuditLog({
+          entityType,
+          entityId: entityId ?? device.id,
+          deviceId: device.id,
+          groupId,
+          scheduleId,
+          action: `${action}:rollback`,
+          status: "failed",
+          source,
+          details: { rollbackAction: rollbackStep.action, error: rollbackError.message },
+        });
+      }
+    }
+  }
+
+  throw lastError || new Error(`Action failed after ${attempts} attempts.`);
+};
+
 const executeScheduleAction = async (scheduleId) => {
   const schedule = await getAsync(
     `SELECT * FROM device_schedules WHERE id = ?`,
@@ -371,14 +648,7 @@ const executeScheduleAction = async (scheduleId) => {
     return;
   }
 
-  const brand = getNormalizedBrand(device);
-
-  let actionParams = {};
-  try {
-    actionParams = schedule.action_params ? JSON.parse(schedule.action_params) : {};
-  } catch (error) {
-    console.warn(`Failed to parse action_params for schedule ${scheduleId}:`, error.message);
-  }
+  const actionParams = safeJsonParse(schedule.action_params, {});
   // If the schedule contains a sequence of actions, run them in order
   // record run start
   let runRowId = null;
@@ -389,169 +659,91 @@ const executeScheduleAction = async (scheduleId) => {
     // ignore logging errors
   }
 
+  const defaultRetryCount = Number(actionParams.retryCount ?? 1);
+  const defaultRetryDelayMs = Number(actionParams.retryDelayMs ?? 1000);
+  const defaultRollbackOnFail = Boolean(actionParams.rollbackOnFail);
+
   if (Array.isArray(actionParams.sequence) && actionParams.sequence.length > 0) {
+    const stepResults = [];
     for (const step of actionParams.sequence) {
       const act = step.action;
       const params = step.params || {};
       try {
-        switch (act) {
-          case "poweron":
-            await powerOnDevice(device);
-            await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-                  try { await broadcastDeviceState(device.id); } catch (e) {}
-            // wait for the device to report as 'On' before proceeding to next step
-            // step.waitForReadyMs can override the default max wait (ms)
-            const maxWaitMs = Number(step.waitForReadyMs || 30000);
-            const pollInterval = 1000;
-            let waited = 0;
-            try {
-              while (waited < maxWaitMs) {
-                const state = await queryDevicePowerState(device);
-                if (state && typeof state === "string" && state.toLowerCase().includes("on")) {
-                  break;
-                }
-                await new Promise((r) => setTimeout(r, pollInterval));
-                waited += pollInterval;
-              }
-            } catch (e) {
-              // ignore polling errors and continue
-            }
+        const retryCount = Number(step.retryCount ?? defaultRetryCount);
+        const retryDelayMs = Number(step.retryDelayMs ?? defaultRetryDelayMs);
+        const rollbackOnFail = Boolean(step.rollbackOnFail ?? defaultRollbackOnFail);
 
-            // optional settle delay after ready
-            if (step.settleMs && Number(step.settleMs) > 0) {
-              await new Promise((r) => setTimeout(r, Number(step.settleMs)));
-            }
-          case "poweroff":
-            await powerOffDevice(device);
-            await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
-            try { await broadcastDeviceState(device.id); } catch (e) {}
-            break;
-          case "restart":
-            await wakeDevice(device.mac);
-            await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-            try { await broadcastDeviceState(device.id); } catch (e) {}
-            break;
-          case "launchApp":
-            await launchWebosApp(device.ip, params.target || params.appId || params.uri);
-            break;
-          case "mute":
-            if (brand === "samsung") {
-              await setSamsungMute(device.ip, true);
-            } else {
-              await setWebosMute(device.ip, true);
-            }
-            break;
-          case "unmute":
-            if (brand === "samsung") {
-              await setSamsungMute(device.ip, false);
-            } else {
-              await setWebosMute(device.ip, false);
-            }
-            break;
-          case "volumeUp":
-            if (brand === "samsung") {
-              await adjustSamsungVolume(device.ip, "Up");
-            } else {
-              await adjustWebosVolume(device.ip, "Up");
-            }
-            break;
-          case "volumeDown":
-            if (brand === "samsung") {
-              await adjustSamsungVolume(device.ip, "Down");
-            } else {
-              await adjustWebosVolume(device.ip, "Down");
-            }
-            break;
-          case "setVolume":
-            if (brand === "samsung") {
-              throw new Error("Samsung uređaji trenutno ne podržavaju precizno postavljanje volume-a. Koristi volumeUp/volumeDown ili mute.");
-            }
-            if (typeof params.volume === "number") {
-              await setWebosVolume(device.ip, params.volume);
-            }
-            break;
-          default:
-            console.warn(`Unknown step action for schedule ${scheduleId}: ${act}`);
-        }
+        const result = await executeWithRetryAndRollback({
+          device,
+          action: act,
+          params,
+          retryCount,
+          retryDelayMs,
+          rollbackOnFail,
+          source: "schedule",
+          scheduleId,
+          entityType: "schedule",
+          entityId: scheduleId,
+        });
+        stepResults.push({ action: act, status: "success", attempts: result.attempts });
 
         // optional delay after this step (ms)
         if (step.delayMs && Number(step.delayMs) > 0) {
-          await new Promise((r) => setTimeout(r, Number(step.delayMs)));
+          await sleep(Number(step.delayMs));
         }
       } catch (err) {
-          console.error(`Error executing step ${act} for schedule ${scheduleId}:`, err);
-          // log error details
+        console.error(`Error executing step ${act} for schedule ${scheduleId}:`, err);
+        stepResults.push({ action: act, status: "failed", error: String(err) });
+        if (!step.continueOnError) {
           try {
-            if (runRowId) await runAsync(`UPDATE schedule_runs SET status = ?, details = ? WHERE id = ?`, ['failed', JSON.stringify({ step: act, error: String(err) }), runRowId]);
+            if (runRowId) {
+              await runAsync(
+                `UPDATE schedule_runs SET status = ?, details = ? WHERE id = ?`,
+                ["failed", JSON.stringify({ failedStep: act, results: stepResults }), runRowId]
+              );
+            }
           } catch (e) {}
-          // continue to next step
+          return;
+        }
       }
     }
-      // all steps finished successfully
-      try {
-        if (runRowId) await runAsync(`UPDATE schedule_runs SET status = ?, details = ? WHERE id = ?`, ['success', JSON.stringify({ sequence: actionParams.sequence }), runRowId]);
-      } catch (e) {}
-      return;
+
+    // all sequence steps finished
+    try {
+      if (runRowId) {
+        await runAsync(
+          `UPDATE schedule_runs SET status = ?, details = ? WHERE id = ?`,
+          ["success", JSON.stringify({ sequence: actionParams.sequence, results: stepResults }), runRowId]
+        );
+      }
+    } catch (e) {}
+    return;
   }
 
   // Fallback: single-action schedules (backwards compatible)
-  switch (schedule.action) {
-    case "poweron":
-      await powerOnDevice(device);
-      await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-      try { await broadcastDeviceState(device.id); } catch (e) {}
-      break;
-    case "poweroff":
-      await powerOffDevice(device);
-      await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
-      try { await broadcastDeviceState(device.id); } catch (e) {}
-      break;
-    case "restart":
-      await wakeDevice(device.mac);
-      await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-      try { await broadcastDeviceState(device.id); } catch (e) {}
-      break;
-    case "launchApp":
-      await launchWebosApp(device.ip, actionParams.target || actionParams.appId || actionParams.uri);
-      break;
-    case "mute":
-      if (brand === "samsung") {
-        await setSamsungMute(device.ip, true);
-      } else {
-        await setWebosMute(device.ip, true);
-      }
-      break;
-    case "unmute":
-      if (brand === "samsung") {
-        await setSamsungMute(device.ip, false);
-      } else {
-        await setWebosMute(device.ip, false);
-      }
-      break;
-    case "volumeUp":
-      if (brand === "samsung") {
-        await adjustSamsungVolume(device.ip, "Up");
-      } else {
-        await adjustWebosVolume(device.ip, "Up");
-      }
-      break;
-    case "volumeDown":
-      if (brand === "samsung") {
-        await adjustSamsungVolume(device.ip, "Down");
-      } else {
-        await adjustWebosVolume(device.ip, "Down");
-      }
-      break;
-    case "setVolume":
-      if (brand === "samsung") {
-        throw new Error("Samsung uređaji trenutno ne podržavaju precizno postavljanje volume-a. Koristi volumeUp/volumeDown ili mute.");
-      }
-      if (typeof actionParams.volume === "number") {
-        await setWebosVolume(device.ip, actionParams.volume);
-      }
-      break;
-    default:
-      console.warn(`Unknown schedule action for schedule ${scheduleId}: ${schedule.action}`);
+  try {
+    await executeWithRetryAndRollback({
+      device,
+      action: schedule.action,
+      params: actionParams,
+      retryCount: defaultRetryCount,
+      retryDelayMs: defaultRetryDelayMs,
+      rollbackOnFail: defaultRollbackOnFail,
+      source: "schedule",
+      scheduleId,
+      entityType: "schedule",
+      entityId: scheduleId,
+    });
+  } catch (error) {
+    if (runRowId) {
+      try {
+        await runAsync(
+          `UPDATE schedule_runs SET status = ?, details = ? WHERE id = ?`,
+          ["failed", JSON.stringify({ action: schedule.action, error: error.message }), runRowId]
+        );
+      } catch (e) {}
+    }
+    throw error;
   }
 
   // update single-action run status
@@ -771,6 +963,16 @@ app.post("/devices/:id/poweroff", async (req, res) => {
 
     console.log(`Power off requested for ${device.name} (${device.ip}) brand=${device.brand} result=${JSON.stringify(result)}`);
 
+    await writeAuditLog({
+      entityType: "device",
+      entityId: device.id,
+      deviceId: device.id,
+      action: "poweroff",
+      status: result.success ? "success" : "failed",
+      source: "manual-poweroff",
+      details: { reason: result.reason, method: result.method },
+    });
+
     res.json({
       success: result.success,
       message: result.success ? "Power off completed" : `Power off failed: ${result.reason}`,
@@ -972,6 +1174,16 @@ app.post("/devices/:id/poweron", async (req, res) => {
 
     console.log(`Power on requested for ${device.name} (${device.ip}) brand=${device.brand}`);
 
+    await writeAuditLog({
+      entityType: "device",
+      entityId: device.id,
+      deviceId: device.id,
+      action: "poweron",
+      status: success ? "success" : "failed",
+      source: "manual-poweron",
+      details: { confirmed: success },
+    });
+
     res.json({
       success,
       message: success ? "Power on completed" : "Power on request sent but did not confirm.",
@@ -986,7 +1198,7 @@ app.post("/devices/:id/poweron", async (req, res) => {
 
 app.post("/devices/:id/action", async (req, res) => {
   try {
-    const { action, action_params } = req.body;
+    const { action, action_params, retryCount, retryDelayMs, rollbackOnFail } = req.body;
     const device = await getAsync("SELECT * FROM devices WHERE id = ?", [req.params.id]);
     if (!device) {
       return res.status(404).json({ error: "Device not found" });
@@ -996,71 +1208,19 @@ app.post("/devices/:id/action", async (req, res) => {
     }
 
     const params = action_params || {};
-    const brand = getNormalizedBrand(device);
-    switch (action) {
-      case "poweron":
-        await powerOnDevice(device);
-        await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-        try { await broadcastDeviceState(device.id); } catch (e) {}
-        break;
-      case "poweroff":
-        await powerOffDevice(device);
-        await runAsync(`UPDATE devices SET power_state = 'Off' WHERE id = ?`, [device.id]);
-        try { await broadcastDeviceState(device.id); } catch (e) {}
-        break;
-      case "restart":
-        await wakeDevice(device.mac);
-        await runAsync(`UPDATE devices SET status = 'Online', power_state = 'On' WHERE id = ?`, [device.id]);
-        try { await broadcastDeviceState(device.id); } catch (e) {}
-        break;
-      case "launchApp":
-        if (!params.target) {
-          return res.status(400).json({ error: "launchApp action requires target." });
-        }
-        await launchWebosApp(device.ip, params.target);
-        break;
-      case "mute":
-        if (brand === "samsung") {
-          await setSamsungMute(device.ip, true);
-        } else {
-          await setWebosMute(device.ip, true);
-        }
-        break;
-      case "unmute":
-        if (brand === "samsung") {
-          await setSamsungMute(device.ip, false);
-        } else {
-          await setWebosMute(device.ip, false);
-        }
-        break;
-      case "volumeUp":
-        if (brand === "samsung") {
-          await adjustSamsungVolume(device.ip, "Up");
-        } else {
-          await adjustWebosVolume(device.ip, "Up");
-        }
-        break;
-      case "volumeDown":
-        if (brand === "samsung") {
-          await adjustSamsungVolume(device.ip, "Down");
-        } else {
-          await adjustWebosVolume(device.ip, "Down");
-        }
-        break;
-      case "setVolume":
-        if (brand === "samsung") {
-          return res.status(400).json({ error: "Samsung uređaji trenutno ne podržavaju precizno postavljanje volume-a. Koristi volumeUp/volumeDown ili mute." });
-        }
-        if (typeof params.volume !== "number") {
-          return res.status(400).json({ error: "setVolume action requires numeric volume." });
-        }
-        await setWebosVolume(device.ip, params.volume);
-        break;
-      default:
-        return res.status(400).json({ error: `Unknown action: ${action}` });
-    }
+    const result = await executeWithRetryAndRollback({
+      device,
+      action,
+      params,
+      retryCount: Number(retryCount ?? 1),
+      retryDelayMs: Number(retryDelayMs ?? 1000),
+      rollbackOnFail: Boolean(rollbackOnFail),
+      source: "manual-action",
+      entityType: "device",
+      entityId: device.id,
+    });
 
-    res.json({ success: true, action, device: device.name });
+    res.json({ success: true, action, device: device.name, attempts: result.attempts });
   } catch (error) {
     console.error("Device action failed:", error);
     res.status(500).json({ error: error.message });
@@ -1083,19 +1243,58 @@ app.post("/devices/:id/restart", async (req, res) => {
     const brand = (device.brand || "").trim().toLowerCase();
     console.log(`Restart requested for ${device.name} (${device.ip}) brand=${brand}`);
 
+    await writeAuditLog({
+      entityType: "device",
+      entityId: device.id,
+      deviceId: device.id,
+      action: "restart",
+      status: "running",
+      source: "manual-restart",
+      details: { brand },
+    });
+
     if (brand === "webos" || brand === "lg") {
       // For webOS: power off via webOS, then WoL after 8s (non-blocking)
       res.json({ id: device.id, name: device.name, restarted: true, method: "webos" });
       sendWebosRestart(device.ip, device.mac).then(async () => {
         await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
         try { await broadcastDeviceState(device.id); } catch (e) {}
-      }).catch((e) => console.error("Restart error:", e));
+        await writeAuditLog({
+          entityType: "device",
+          entityId: device.id,
+          deviceId: device.id,
+          action: "restart",
+          status: "success",
+          source: "manual-restart",
+          details: { method: "webos" },
+        });
+      }).catch(async (e) => {
+        await writeAuditLog({
+          entityType: "device",
+          entityId: device.id,
+          deviceId: device.id,
+          action: "restart",
+          status: "failed",
+          source: "manual-restart",
+          details: { method: "webos", error: String(e) },
+        });
+        console.error("Restart error:", e);
+      });
     } else {
       const restarted = await wakeDevice(device.mac);
       if (restarted) {
         await runAsync(`UPDATE devices SET status = 'Online', power_state = 'On' WHERE id = ?`, [device.id]);
         try { await broadcastDeviceState(device.id); } catch (e) {}
       }
+      await writeAuditLog({
+        entityType: "device",
+        entityId: device.id,
+        deviceId: device.id,
+        action: "restart",
+        status: restarted ? "success" : "failed",
+        source: "manual-restart",
+        details: { method: "wol" },
+      });
       res.json({ id: device.id, name: device.name, restarted });
     }
   } catch (error) {
@@ -1278,6 +1477,16 @@ app.post("/groups/:id/restart", async (req, res) => {
       groupId,
     ]);
 
+    await writeAuditLog({
+      entityType: "group",
+      entityId: groupId,
+      groupId,
+      action: "group:restart",
+      status: "running",
+      source: "manual-group-restart",
+      details: { deviceCount: devices.length },
+    });
+
     // Respond immediately
     res.json({ results: devices.map((d) => ({ id: d.id, name: d.name, restarted: true })) });
 
@@ -1295,7 +1504,27 @@ app.post("/groups/:id/restart", async (req, res) => {
         });
       }
     }
+
+    await writeAuditLog({
+      entityType: "group",
+      entityId: groupId,
+      groupId,
+      action: "group:restart",
+      status: "success",
+      source: "manual-group-restart",
+      details: { deviceCount: devices.length },
+    });
   } catch (error) {
+    const groupId = Number(req.params.id);
+    await writeAuditLog({
+      entityType: "group",
+      entityId: groupId,
+      groupId,
+      action: "group:restart",
+      status: "failed",
+      source: "manual-group-restart",
+      details: { error: error.message },
+    });
     res.status(500).json({ error: error.message });
   }
 });
@@ -1325,8 +1554,31 @@ app.post("/groups/:id/poweroff", async (req, res) => {
       })
     );
 
+    await writeAuditLog({
+      entityType: "group",
+      entityId: groupId,
+      groupId,
+      action: "group:poweroff",
+      status: results.every((r) => r.success) ? "success" : "partial",
+      source: "manual-group-poweroff",
+      details: {
+        deviceCount: devices.length,
+        successCount: results.filter((r) => r.success).length,
+      },
+    });
+
     res.json({ results });
   } catch (error) {
+    const groupId = Number(req.params.id);
+    await writeAuditLog({
+      entityType: "group",
+      entityId: groupId,
+      groupId,
+      action: "group:poweroff",
+      status: "failed",
+      source: "manual-group-poweroff",
+      details: { error: error.message },
+    });
     res.status(500).json({ error: error.message });
   }
 });
@@ -1352,7 +1604,313 @@ app.post("/groups/:id/poweron", async (req, res) => {
       })
     );
 
+    await writeAuditLog({
+      entityType: "group",
+      entityId: groupId,
+      groupId,
+      action: "group:poweron",
+      status: results.every((r) => r.poweredOn) ? "success" : "partial",
+      source: "manual-group-poweron",
+      details: {
+        deviceCount: devices.length,
+        successCount: results.filter((r) => r.poweredOn).length,
+      },
+    });
+
     res.json({ results });
+  } catch (error) {
+    const groupId = Number(req.params.id);
+    await writeAuditLog({
+      entityType: "group",
+      entityId: groupId,
+      groupId,
+      action: "group:poweron",
+      status: "failed",
+      source: "manual-group-poweron",
+      details: { error: error.message },
+    });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/audit-logs", async (req, res) => {
+  try {
+    const limit = Math.min(500, Math.max(1, Number(req.query.limit || 100)));
+    const params = [];
+    const filters = [];
+
+    if (req.query.entityType) {
+      filters.push("entity_type = ?");
+      params.push(String(req.query.entityType));
+    }
+    if (req.query.entityId) {
+      filters.push("entity_id = ?");
+      params.push(Number(req.query.entityId));
+    }
+    if (req.query.deviceId) {
+      filters.push("device_id = ?");
+      params.push(Number(req.query.deviceId));
+    }
+    if (req.query.groupId) {
+      filters.push("group_id = ?");
+      params.push(Number(req.query.groupId));
+    }
+    if (req.query.scheduleId) {
+      filters.push("schedule_id = ?");
+      params.push(Number(req.query.scheduleId));
+    }
+    if (req.query.status) {
+      filters.push("status = ?");
+      params.push(String(req.query.status));
+    }
+
+    const whereSql = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const rows = await allAsync(
+      `SELECT * FROM audit_logs ${whereSql} ORDER BY id DESC LIMIT ?`,
+      [...params, limit]
+    );
+
+    res.json(rows.map((row) => ({ ...row, details: safeJsonParse(row.details, null) })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/health/summary", async (req, res) => {
+  try {
+    const totals = await getAsync(
+      `SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN status = 'Online' THEN 1 ELSE 0 END) AS online,
+        SUM(CASE WHEN status = 'Offline' THEN 1 ELSE 0 END) AS offline,
+        SUM(CASE WHEN power_state = 'On' THEN 1 ELSE 0 END) AS powerOn,
+        SUM(CASE WHEN power_state = 'Off' THEN 1 ELSE 0 END) AS powerOff
+      FROM devices`
+    );
+
+    const scheduleStats24h = await getAsync(
+      `SELECT
+        SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success,
+        SUM(CASE WHEN status != 'success' THEN 1 ELSE 0 END) AS failed,
+        COUNT(*) AS total
+      FROM schedule_runs
+      WHERE datetime(created_at) >= datetime('now', '-1 day')`
+    );
+
+    const recentFailures = await allAsync(
+      `SELECT * FROM audit_logs
+       WHERE status LIKE 'failed%'
+       ORDER BY id DESC
+       LIMIT 20`
+    );
+
+    const lastActions = await allAsync(
+      `SELECT d.id AS deviceId, d.name AS deviceName, a.action, a.status, a.created_at
+       FROM devices d
+       LEFT JOIN audit_logs a ON a.id = (
+         SELECT id FROM audit_logs x
+         WHERE x.device_id = d.id
+         ORDER BY x.id DESC LIMIT 1
+       )
+       ORDER BY d.name COLLATE NOCASE`
+    );
+
+    const success = Number(scheduleStats24h?.success || 0);
+    const total = Number(scheduleStats24h?.total || 0);
+    const successRate = total > 0 ? Number(((success / total) * 100).toFixed(2)) : null;
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      devices: {
+        total: Number(totals?.total || 0),
+        online: Number(totals?.online || 0),
+        offline: Number(totals?.offline || 0),
+        powerOn: Number(totals?.powerOn || 0),
+        powerOff: Number(totals?.powerOff || 0),
+      },
+      schedules24h: {
+        total,
+        success,
+        failed: Number(scheduleStats24h?.failed || 0),
+        successRate,
+      },
+      lastActions,
+      recentFailures: recentFailures.map((row) => ({ ...row, details: safeJsonParse(row.details, null) })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/scenes", async (req, res) => {
+  try {
+    const scenes = await allAsync(`SELECT * FROM scenes ORDER BY name COLLATE NOCASE`);
+    res.json(
+      scenes.map((scene) => ({
+        ...scene,
+        enabled: scene.enabled === 1,
+        steps: safeJsonParse(scene.steps_json, []),
+      }))
+    );
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/scenes", async (req, res) => {
+  try {
+    const { name, description, targetType, targetId, steps, enabled } = req.body;
+    if (!name || !Array.isArray(steps) || steps.length === 0) {
+      return res.status(400).json({ error: "Scene requires name and non-empty steps array." });
+    }
+
+    const result = await runAsync(
+      `INSERT INTO scenes (name, description, target_type, target_id, steps_json, enabled)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        name,
+        description || null,
+        targetType || "group",
+        targetId ?? null,
+        JSON.stringify(steps),
+        enabled === false ? 0 : 1,
+      ]
+    );
+
+    const scene = await getAsync(`SELECT * FROM scenes WHERE id = ?`, [result.lastID]);
+    res.json({ ...scene, enabled: scene.enabled === 1, steps: safeJsonParse(scene.steps_json, []) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put("/scenes/:id", async (req, res) => {
+  try {
+    const { name, description, targetType, targetId, steps, enabled } = req.body;
+    if (!name || !Array.isArray(steps) || steps.length === 0) {
+      return res.status(400).json({ error: "Scene requires name and non-empty steps array." });
+    }
+
+    await runAsync(
+      `UPDATE scenes SET name = ?, description = ?, target_type = ?, target_id = ?, steps_json = ?, enabled = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        name,
+        description || null,
+        targetType || "group",
+        targetId ?? null,
+        JSON.stringify(steps),
+        enabled === false ? 0 : 1,
+        req.params.id,
+      ]
+    );
+
+    const scene = await getAsync(`SELECT * FROM scenes WHERE id = ?`, [req.params.id]);
+    if (!scene) {
+      return res.status(404).json({ error: "Scene not found." });
+    }
+    res.json({ ...scene, enabled: scene.enabled === 1, steps: safeJsonParse(scene.steps_json, []) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete("/scenes/:id", async (req, res) => {
+  try {
+    await runAsync(`DELETE FROM scenes WHERE id = ?`, [req.params.id]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/scenes/:id/execute", async (req, res) => {
+  try {
+    const scene = await getAsync(`SELECT * FROM scenes WHERE id = ?`, [req.params.id]);
+    if (!scene) {
+      return res.status(404).json({ error: "Scene not found." });
+    }
+    if (scene.enabled !== 1) {
+      return res.status(400).json({ error: "Scene is disabled." });
+    }
+
+    const steps = safeJsonParse(scene.steps_json, []);
+    if (!Array.isArray(steps) || steps.length === 0) {
+      return res.status(400).json({ error: "Scene has no steps." });
+    }
+
+    let devices = [];
+    if (scene.target_type === "device") {
+      const one = await getAsync(`SELECT * FROM devices WHERE id = ?`, [scene.target_id]);
+      devices = one ? [one] : [];
+    } else if (scene.target_type === "group") {
+      devices = await allAsync(`SELECT * FROM devices WHERE group_id = ? ORDER BY name COLLATE NOCASE`, [scene.target_id]);
+    } else {
+      devices = await allAsync(`SELECT * FROM devices ORDER BY name COLLATE NOCASE`);
+    }
+
+    if (!devices.length) {
+      return res.status(400).json({ error: "No devices resolved for scene target." });
+    }
+
+    const results = [];
+    for (const device of devices) {
+      const deviceSteps = [];
+      let ok = true;
+      for (const step of steps) {
+        try {
+          const action = step.action;
+          const params = step.params || {};
+          const result = await executeWithRetryAndRollback({
+            device,
+            action,
+            params,
+            retryCount: Number(step.retryCount ?? 1),
+            retryDelayMs: Number(step.retryDelayMs ?? 1000),
+            rollbackOnFail: Boolean(step.rollbackOnFail ?? false),
+            source: "scene",
+            groupId: scene.target_type === "group" ? scene.target_id : null,
+            entityType: "scene",
+            entityId: scene.id,
+          });
+          deviceSteps.push({ action, status: "success", attempts: result.attempts });
+          if (step.delayMs && Number(step.delayMs) > 0) {
+            await sleep(Number(step.delayMs));
+          }
+        } catch (stepError) {
+          ok = false;
+          deviceSteps.push({ action: step.action, status: "failed", error: stepError.message });
+          if (!step.continueOnError) {
+            break;
+          }
+        }
+      }
+
+      results.push({
+        deviceId: device.id,
+        deviceName: device.name,
+        success: ok,
+        steps: deviceSteps,
+      });
+    }
+
+    await writeAuditLog({
+      entityType: "scene",
+      entityId: scene.id,
+      action: "scene:execute",
+      status: results.every((r) => r.success) ? "success" : "partial",
+      source: "scene",
+      groupId: scene.target_type === "group" ? scene.target_id : null,
+      details: { devices: results.length },
+    });
+
+    res.json({
+      sceneId: scene.id,
+      name: scene.name,
+      targetType: scene.target_type,
+      targetId: scene.target_id,
+      results,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

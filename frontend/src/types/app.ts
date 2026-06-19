@@ -1,0 +1,76 @@
+export interface Device {
+  id: number;
+  name: string;
+  ip: string;
+  mac: string;
+  brand: string;
+  status: string;
+  powerState: string;
+  selected: boolean;
+  groupId: number | null;
+  groupName?: string | null;
+  created_at?: string;
+  last_active_at?: string;
+}
+
+export interface Group {
+  id: number;
+  name: string;
+  deviceCount: number;
+}
+
+export interface DeviceHistoryEntry {
+  timestamp: string;
+  time: number;
+  status: string;
+  note: string;
+}
+
+export interface DeviceSchedule {
+  id: number;
+  device_id: number;
+  cron: string;
+  action: string;
+  action_params: Record<string, any>;
+  description: string | null;
+  enabled: boolean;
+}
+
+export interface MessageModalState {
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  onConfirm?: () => Promise<void> | void;
+}
+
+export interface DiscoveredDevice {
+  ip: string;
+  name?: string;
+  mac?: string;
+  brand?: string;
+  already_added?: boolean;
+}
+
+export type ToastType = "info" | "success" | "error";
+
+export interface ToastMessage {
+  id: string;
+  type: ToastType;
+  title: string;
+  message: string;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  entity_type: string | null;
+  entity_id: number | null;
+  device_id: number | null;
+  group_id: number | null;
+  schedule_id: number | null;
+  action: string;
+  status: string;
+  source: string | null;
+  details: unknown;
+  created_at: string;
+}
