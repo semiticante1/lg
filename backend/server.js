@@ -205,27 +205,31 @@ async function initDatabase() {
 
   const row = await getAsync("SELECT COUNT(*) AS count FROM devices");
 
-  try {
-    const data = JSON.parse(fs.readFileSync(JSON_FILE, "utf8"));
+  if (row?.count === 0) {
+    try {
+      const data = JSON.parse(fs.readFileSync(JSON_FILE, "utf8"));
 
-    for (const device of data) {
-      await runAsync(
-        `INSERT OR IGNORE INTO devices (id, name, ip, mac, brand, status, power_state) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          device.id,
-          device.name,
-          device.ip,
-          device.mac,
-          device.brand || "generic",
-          device.status || "Offline",
-          device.powerState || device.power_state || "Off",
-        ]
-      );
+      for (const device of data) {
+        await runAsync(
+          `INSERT OR IGNORE INTO devices (id, name, ip, mac, brand, status, power_state) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [
+            device.id,
+            device.name,
+            device.ip,
+            device.mac,
+            device.brand || "generic",
+            device.status || "Offline",
+            device.powerState || device.power_state || "Off",
+          ]
+        );
+      }
+
+      console.log("Seeded SQLite from devices.json because devices table was empty.");
+    } catch (error) {
+      console.log("No JSON seed performed:", error.message);
     }
-
-    console.log("Imported or verified devices from devices.json into SQLite.");
-  } catch (error) {
-    console.log("No JSON import performed:", error.message);
+  } else {
+    console.log("Skipping devices.json seed because SQLite already has devices.");
   }
 }
 
