@@ -417,9 +417,19 @@ const wakeDeviceAcrossTargets = async (mac, ip, logPrefix = "") => {
   return anySent;
 };
 
-const sendWebosRestart = async (ip, mac) => {
+const sendWebosRestart = async (ip, mac, profile = {}) => {
+  const restartProfile = {
+    initialDelayMs: Number(profile.initialDelayMs ?? 20000),
+    maxAttempts: Number(profile.maxAttempts ?? 8),
+    burstCount: Number(profile.burstCount ?? 3),
+    burstPauseMs: Number(profile.burstPauseMs ?? 400),
+    postWakePingDelayMs: Number(profile.postWakePingDelayMs ?? 6000),
+    betweenAttemptsDelayMs: Number(profile.betweenAttemptsDelayMs ?? 7000),
+    failedWakeBackoffMs: Number(profile.failedWakeBackoffMs ?? 5000),
+  };
+
   const logPrefix = `[RestartFlow ip=${ip || "n/a"} mac=${mac || "n/a"}]`;
-  console.log(`${logPrefix} start`);
+  console.log(`${logPrefix} start profile=${JSON.stringify(restartProfile)}`);
 
   // First try native reboot. If supported by TV firmware, this avoids WoL entirely.
   const rebooted = await sendWebosRequest(
@@ -463,27 +473,27 @@ const sendWebosRestart = async (ip, mac) => {
 
   // Step 2: Give TV time to fully power down before sending WoL.
   // Some LG/webOS models keep NIC in transition longer than expected.
-  await delay(20000);
+  await delay(restartProfile.initialDelayMs);
   console.log(`${logPrefix} shutdown wait complete`);
 
   // Step 3: WoL can be missed while NIC is transitioning during shutdown,
   // so retry over a longer window before declaring restart failed.
-  const maxAttempts = 8;
+  const maxAttempts = restartProfile.maxAttempts;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     console.log(`${logPrefix} attempt=${attempt}/${maxAttempts} begin`);
 
     // Send a small burst each attempt to improve delivery reliability.
     let wakeSent = false;
-    for (let burst = 0; burst < 3; burst += 1) {
+    for (let burst = 0; burst < restartProfile.burstCount; burst += 1) {
       const sent = await wakeDeviceAcrossTargets(mac, ip, `${logPrefix} attempt=${attempt} burst=${burst + 1}`);
       wakeSent = wakeSent || sent;
       console.log(`${logPrefix} attempt=${attempt} burst=${burst + 1} sentAny=${sent}`);
-      await delay(400);
+      await delay(restartProfile.burstPauseMs);
     }
 
     if (!wakeSent) {
       console.log(`${logPrefix} attempt=${attempt} no WoL send confirmed`);
-      await delay(5000);
+      await delay(restartProfile.failedWakeBackoffMs);
       continue;
     }
 
@@ -492,7 +502,7 @@ const sendWebosRestart = async (ip, mac) => {
       return true;
     }
 
-    await delay(6000);
+    await delay(restartProfile.postWakePingDelayMs);
     const alive = await pingDevice(ip);
     console.log(`${logPrefix} attempt=${attempt} pingAlive=${alive}`);
     if (alive) {
@@ -501,7 +511,7 @@ const sendWebosRestart = async (ip, mac) => {
     }
 
     if (attempt < maxAttempts) {
-      await delay(7000);
+      await delay(restartProfile.betweenAttemptsDelayMs);
     }
   }
 

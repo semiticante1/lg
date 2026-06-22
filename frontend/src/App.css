@@ -252,6 +252,16 @@ select {
   box-shadow: 0 0 20px var(--glow);
 }
 
+.diagnostics-alert-box {
+  margin: 8px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(251, 113, 133, 0.5);
+  border-radius: 10px;
+  background: rgba(251, 113, 133, 0.12);
+  color: var(--heading);
+  font-weight: 600;
+}
+
 .theme-light .sidebar-menu p.active {
   background: var(--accent);
   color: #ffffff;

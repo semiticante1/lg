@@ -74,3 +74,52 @@ export interface AuditLogEntry {
   details: unknown;
   created_at: string;
 }
+
+export interface HealthSummary {
+  timestamp: string;
+  devices: {
+    total: number;
+    online: number;
+    offline: number;
+    powerOn: number;
+    powerOff: number;
+  };
+  schedules24h: {
+    total: number;
+    success: number;
+    failed: number;
+    successRate: number | null;
+  };
+  recentFailures: AuditLogEntry[];
+}
+
+export interface BackupInfo {
+  name: string;
+  sizeBytes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DiagnosticsSummary {
+  timestamp: string;
+  config: {
+    weeklyMaintenanceCron: string;
+    autoBackupIntervalMs: number;
+    macSelfHealIntervalMs: number;
+    maxBackups: number;
+    runtimeIssueAlertThreshold: number;
+  };
+  lastMaintenance: {
+    timestamp: string;
+    trigger: string;
+    backupFile: string | null;
+    repairedMacs: number;
+    unresolvedMacs: number;
+    dbOptimizeOk: boolean;
+    status: string;
+    error?: string;
+  } | null;
+  maintenanceHistory: Array<Record<string, any>>;
+  runtimeIssues: Array<Record<string, any>>;
+  recentFailedAudit: Array<Record<string, any>>;
+}

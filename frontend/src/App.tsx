@@ -11,7 +11,10 @@ import type {
   DeviceSchedule,
   DiscoveredDevice,
   Group,
+  HealthSummary,
   MessageModalState,
+  BackupInfo,
+  DiagnosticsSummary,
   ToastMessage,
 } from "./types/app";
 import {
@@ -89,6 +92,14 @@ function App() {
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredDevice[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [selectedDiscoveredDevices, setSelectedDiscoveredDevices] = useState<Set<string>>(new Set());
+  const [healthSummary, setHealthSummary] = useState<HealthSummary | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [backupList, setBackupList] = useState<BackupInfo[]>([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [selectedBackup, setSelectedBackup] = useState("");
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsSummary | null>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const diagnosticsAlertCountRef = useRef(0);
 
   const baseUrl = backendUrl.replace(/\/$/, "");
 
@@ -149,11 +160,14 @@ function App() {
 
   useEffect(() => {
     const interval = setInterval(async () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
       await loadDevices();
       setLastRefresh(new Date().toLocaleTimeString());
       setStatusMessage("Automatsko osvježenje statusa");
       setTimeout(() => setStatusMessage(""), 2000);
-    }, 10000);
+    }, 12000);
 
     return () => clearInterval(interval);
   }, [baseUrl]);
@@ -194,12 +208,196 @@ function App() {
 
   const refreshAll = async () => {
     setLoading(true);
-    await Promise.all([loadDevices(), loadGroups(), loadAuditLogs(auditDeviceFilter, auditGroupFilter)]);
+    await Promise.all([
+      loadDevices(),
+      loadGroups(),
+      loadAuditLogs(auditDeviceFilter, auditGroupFilter),
+      loadHealthSummary(),
+    ]);
     setLoading(false);
     setLastRefresh(new Date().toLocaleTimeString());
     setStatusMessage("Status osvježen");
     setTimeout(() => setStatusMessage(""), 2000);
   };
+
+  const loadHealthSummary = async () => {
+    setHealthLoading(true);
+    try {
+      const response = await fetch(`${baseUrl}/health/summary`);
+      if (!response.ok) {
+        throw new Error(`Health HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      setHealthSummary(data);
+    } catch (error) {
+      console.error("Health summary load failed:", error);
+      setHealthSummary(null);
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const loadBackups = async () => {
+    setBackupLoading(true);
+    try {
+      const response = await fetch(`${baseUrl}/system/backups`);
+      if (!response.ok) {
+        throw new Error(`Backup list HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      const backups = Array.isArray(data?.backups) ? data.backups : [];
+      setBackupList(backups);
+      if (backups.length > 0 && !selectedBackup) {
+        setSelectedBackup(backups[0].name);
+      }
+    } catch (error) {
+      console.error("Backup list load failed:", error);
+      setBackupList([]);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const loadDiagnostics = async () => {
+    setDiagnosticsLoading(true);
+    try {
+      const response = await fetch(`${baseUrl}/system/diagnostics`);
+      if (!response.ok) {
+        throw new Error(`Diagnostics HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      setDiagnostics(data);
+    } catch (error) {
+      console.error("Diagnostics load failed:", error);
+      setDiagnostics(null);
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  };
+
+  const handleRunMaintenanceNow = async () => {
+    try {
+      setDiagnosticsLoading(true);
+      const response = await fetch(`${baseUrl}/system/maintenance/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "manual-ui" }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.error || response.statusText);
+      }
+
+      showToast("success", "Maintenance", "Sedmično održavanje je pokrenuto ručno i završeno.");
+      await Promise.all([loadHealthSummary(), loadBackups(), loadDiagnostics(), refreshAll()]);
+    } catch (error) {
+      console.error("Manual maintenance run failed:", error);
+      showToast("error", "Maintenance", `Pokretanje održavanja nije uspjelo: ${String((error as Error)?.message || error)}`);
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  };
+
+  const handleShowDiagnosticsSnapshot = () => {
+    if (!diagnostics) {
+      showMessage("Diagnostics", "Diagnostics podaci nisu učitani.");
+      return;
+    }
+
+    const snapshot = JSON.stringify(diagnostics, null, 2);
+    showMessage("Diagnostics snapshot", snapshot);
+  };
+
+  const handleDownloadDiagnosticsSnapshot = () => {
+    if (!diagnostics) {
+      showMessage("Diagnostics", "Diagnostics podaci nisu učitani.");
+      return;
+    }
+
+    const snapshot = JSON.stringify(diagnostics, null, 2);
+    const blob = new Blob([snapshot], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    link.href = url;
+    link.download = `diagnostics-${stamp}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showToast("success", "Diagnostics", "Diagnostics snapshot je preuzet kao JSON fajl.");
+  };
+
+  const handleCreateBackup = async () => {
+    try {
+      setBackupLoading(true);
+      const response = await fetch(`${baseUrl}/system/backups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: "manual-ui" }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.error || response.statusText);
+      }
+
+      showToast("success", "Backup", "Backup baze je uspješno kreiran.");
+      await loadBackups();
+    } catch (error) {
+      console.error("Create backup failed:", error);
+      showToast("error", "Backup", `Backup nije uspio: ${String((error as Error)?.message || error)}`);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (!selectedBackup) {
+      showToast("info", "Restore", "Odaberi backup za restore.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Restore iz backupa ${selectedBackup} će prepisati trenutno stanje baze. Nastaviti?`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setBackupLoading(true);
+      const response = await fetch(`${baseUrl}/system/backups/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: selectedBackup }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => null);
+        throw new Error(err?.error || response.statusText);
+      }
+
+      showToast("success", "Restore", "Restore je završen. Osvježavam stanje...");
+      await refreshAll();
+      await loadBackups();
+    } catch (error) {
+      console.error("Restore backup failed:", error);
+      showToast("error", "Restore", `Restore nije uspio: ${String((error as Error)?.message || error)}`);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activePage === "settings") {
+      loadHealthSummary();
+      loadBackups();
+      loadDiagnostics();
+    }
+  }, [activePage, baseUrl]);
 
   const loadDevices = async () => {
     try {
@@ -704,6 +902,28 @@ function App() {
     const type = title === "Greška" ? "error" : title === "Info" ? "info" : "success";
     showToast(type, title, message);
   };
+
+  useEffect(() => {
+    if (!diagnostics) {
+      return;
+    }
+
+    const threshold = diagnostics.config.runtimeIssueAlertThreshold ?? 8;
+    const issueCount = Array.isArray(diagnostics.runtimeIssues) ? diagnostics.runtimeIssues.length : 0;
+
+    if (issueCount >= threshold && issueCount !== diagnosticsAlertCountRef.current) {
+      diagnosticsAlertCountRef.current = issueCount;
+      showToast(
+        "error",
+        "Diagnostics upozorenje",
+        `Backend je zabilježio ${issueCount} runtime issue zapisa (prag ${threshold}). Pokreni maintenance i provjeri snapshot.`
+      );
+    }
+
+    if (issueCount < threshold) {
+      diagnosticsAlertCountRef.current = issueCount;
+    }
+  }, [diagnostics]);
 
   const showConfirm = (
     title: string,
@@ -2045,6 +2265,121 @@ function App() {
               >
                 Spremi postavke
               </button>
+
+              <br />
+              <br />
+              <h3>Health pregled</h3>
+              <button type="button" className="refresh-btn" onClick={loadHealthSummary} disabled={healthLoading}>
+                {healthLoading ? "Učitavam health..." : "Osvježi health"}
+              </button>
+              {healthSummary ? (
+                <div>
+                  <p>Vrijeme: {new Date(healthSummary.timestamp).toLocaleString()}</p>
+                  <p>Uređaji online/offline: {healthSummary.devices.online} / {healthSummary.devices.offline}</p>
+                  <p>Schedule success 24h: {healthSummary.schedules24h.success}/{healthSummary.schedules24h.total} ({healthSummary.schedules24h.successRate ?? 0}%)</p>
+                  <p>Zadnjih grešaka: {healthSummary.recentFailures.length}</p>
+                </div>
+              ) : (
+                <p>Health podaci trenutno nisu dostupni.</p>
+              )}
+
+              <br />
+              <h3>Backup i restore baze</h3>
+              <button type="button" className="save-btn" onClick={handleCreateBackup} disabled={backupLoading}>
+                {backupLoading ? "Radim backup..." : "Napravi backup"}
+              </button>
+              <button type="button" className="refresh-btn" onClick={loadBackups} disabled={backupLoading} style={{ marginLeft: 8 }}>
+                Osvježi listu backupa
+              </button>
+              <br />
+              <br />
+              <select
+                className="small-select"
+                value={selectedBackup}
+                onChange={(e) => setSelectedBackup(e.target.value)}
+                disabled={backupLoading || backupList.length === 0}
+              >
+                {backupList.length === 0 ? (
+                  <option value="">Nema backup fajlova</option>
+                ) : (
+                  backupList.map((backup) => (
+                    <option key={backup.name} value={backup.name}>
+                      {backup.name} ({Math.round(backup.sizeBytes / 1024)} KB)
+                    </option>
+                  ))
+                )}
+              </select>
+              <br />
+              <br />
+              <button
+                type="button"
+                className="action-btn poweroff-btn"
+                onClick={handleRestoreBackup}
+                disabled={backupLoading || !selectedBackup}
+              >
+                {backupLoading ? "Restore u toku..." : "Restore odabranog backupa"}
+              </button>
+
+              <br />
+              <br />
+              <h3>Automatsko održavanje i brza dijagnostika</h3>
+              <p>
+                Sedmični maintenance se izvršava automatski na backendu. Ovdje možeš ručno pokrenuti maintenance i otvoriti
+                dijagnostički snapshot kad se desi greška.
+              </p>
+              <button
+                type="button"
+                className="action-btn poweron-btn"
+                onClick={handleRunMaintenanceNow}
+                disabled={diagnosticsLoading}
+              >
+                {diagnosticsLoading ? "Maintenance radi..." : "Pokreni maintenance sada"}
+              </button>
+              <button
+                type="button"
+                className="refresh-btn"
+                onClick={loadDiagnostics}
+                disabled={diagnosticsLoading}
+                style={{ marginLeft: 8 }}
+              >
+                Osvježi diagnostics
+              </button>
+              <button
+                type="button"
+                className="save-btn"
+                onClick={handleShowDiagnosticsSnapshot}
+                disabled={!diagnostics}
+                style={{ marginLeft: 8 }}
+              >
+                Prikaži diagnostics snapshot
+              </button>
+              <button
+                type="button"
+                className="save-btn"
+                onClick={handleDownloadDiagnosticsSnapshot}
+                disabled={!diagnostics}
+                style={{ marginLeft: 8 }}
+              >
+                Preuzmi diagnostics JSON
+              </button>
+
+              {diagnostics ? (
+                <div style={{ marginTop: 12 }}>
+                  {diagnostics.runtimeIssues.length >= (diagnostics.config.runtimeIssueAlertThreshold ?? 8) && (
+                    <div className="diagnostics-alert-box">
+                      ⚠️ Upozorenje: runtime issue count je {diagnostics.runtimeIssues.length}, što prelazi prag {diagnostics.config.runtimeIssueAlertThreshold ?? 8}.
+                    </div>
+                  )}
+                  <p><strong>Zadnji maintenance:</strong> {diagnostics.lastMaintenance?.timestamp ? new Date(diagnostics.lastMaintenance.timestamp).toLocaleString() : "nema"}</p>
+                  <p><strong>Trigger:</strong> {diagnostics.lastMaintenance?.trigger || "-"}</p>
+                  <p><strong>Status:</strong> {diagnostics.lastMaintenance?.status || "-"}</p>
+                  <p><strong>Runtime issue zapisa:</strong> {diagnostics.runtimeIssues.length}</p>
+                  <p><strong>Recent failed audit:</strong> {diagnostics.recentFailedAudit.length}</p>
+                  <p><strong>Sedmični cron:</strong> {diagnostics.config.weeklyMaintenanceCron}</p>
+                </div>
+              ) : (
+                <p style={{ marginTop: 12 }}>Diagnostics nisu dostupni.</p>
+              )}
             </div>
           </>
         )}

@@ -26,13 +26,36 @@ const {
   setSamsungVolume,
 } = require("./tv-adapter");
 const { discoverLGTVs } = require("./device-discovery");
+const { buildRestartProfile } = require("./restart-profile");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const DB_FILE = path.join(__dirname, "data.db");
 const JSON_FILE = path.join(__dirname, "devices.json");
+const BACKUP_DIR = path.join(__dirname, "backups");
+const MAX_BACKUP_FILES = Number(process.env.MAX_BACKUP_FILES || 40);
+const AUTO_BACKUP_INTERVAL_MS = Number(process.env.AUTO_BACKUP_INTERVAL_MS || 24 * 60 * 60 * 1000);
+const WEEKLY_MAINTENANCE_CRON = process.env.WEEKLY_MAINTENANCE_CRON || "0 4 * * 0";
+const MAX_RUNTIME_ISSUES = Number(process.env.MAX_RUNTIME_ISSUES || 80);
+const MAX_MAINTENANCE_HISTORY = Number(process.env.MAX_MAINTENANCE_HISTORY || 40);
+const RUNTIME_ISSUE_ALERT_THRESHOLD = Number(process.env.RUNTIME_ISSUE_ALERT_THRESHOLD || 8);
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
+  "http://127.0.0.1:4173",
+];
+const API_RATE_LIMIT_WINDOW_MS = Number(process.env.API_RATE_LIMIT_WINDOW_MS || 60_000);
+const API_RATE_LIMIT_MAX = Number(process.env.API_RATE_LIMIT_MAX || 600);
+const CONTROL_RATE_LIMIT_MAX = Number(process.env.CONTROL_RATE_LIMIT_MAX || 120);
+const MAC_SELF_HEAL_INTERVAL_MS = Number(process.env.MAC_SELF_HEAL_INTERVAL_MS || 15 * 60 * 1000);
 
 const getNormalizedBrand = (device) => (device?.brand || "").trim().toLowerCase();
+const rateLimiterStore = new Map();
+const runtimeIssues = [];
+const maintenanceHistory = [];
+
+app.disable("x-powered-by");
 
 const db = new sqlite3.Database(DB_FILE);
 
@@ -148,6 +171,222 @@ const resolveMacFromArp = async (ip) => {
   return null;
 };
 
+const ensureBackupDirectory = () => {
+  if (!fs.existsSync(BACKUP_DIR)) {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+  }
+};
+
+const escapeSqlString = (value) => String(value).replace(/'/g, "''");
+
+const isSafeBackupName = (name) => {
+  return typeof name === "string" && /^[a-zA-Z0-9._-]+\.db$/.test(name);
+};
+
+const listBackups = () => {
+  ensureBackupDirectory();
+  const files = fs
+    .readdirSync(BACKUP_DIR)
+    .filter((name) => isSafeBackupName(name))
+    .map((name) => {
+      const fullPath = path.join(BACKUP_DIR, name);
+      const stat = fs.statSync(fullPath);
+      return {
+        name,
+        sizeBytes: stat.size,
+        createdAt: stat.birthtime.toISOString(),
+        updatedAt: stat.mtime.toISOString(),
+      };
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  return files;
+};
+
+const pruneOldBackups = () => {
+  const backups = listBackups();
+  if (backups.length <= MAX_BACKUP_FILES) {
+    return;
+  }
+
+  const toDelete = backups.slice(MAX_BACKUP_FILES);
+  toDelete.forEach((backup) => {
+    try {
+      fs.unlinkSync(path.join(BACKUP_DIR, backup.name));
+    } catch (error) {
+      console.warn(`Failed to delete old backup ${backup.name}:`, error.message);
+    }
+  });
+};
+
+const createDatabaseBackup = async (label = "manual") => {
+  ensureBackupDirectory();
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const sanitizedLabel = String(label || "manual").toLowerCase().replace(/[^a-z0-9_-]/g, "-").slice(0, 24);
+  const fileName = `backup-${stamp}-${sanitizedLabel}.db`;
+  const backupPath = path.join(BACKUP_DIR, fileName);
+  const escapedPath = escapeSqlString(backupPath);
+
+  await runAsync(`VACUUM INTO '${escapedPath}'`);
+  pruneOldBackups();
+
+  return {
+    fileName,
+    path: backupPath,
+  };
+};
+
+const resetAllScheduleTasks = () => {
+  for (const [scheduleId, task] of scheduledTasks.entries()) {
+    try {
+      task.stop();
+    } catch {
+      // ignore task stop errors
+    }
+    scheduledTasks.delete(scheduleId);
+  }
+};
+
+const restoreDatabaseFromBackup = async (fileName) => {
+  ensureBackupDirectory();
+  if (!isSafeBackupName(fileName)) {
+    throw new Error("Invalid backup file name.");
+  }
+
+  const backupPath = path.join(BACKUP_DIR, fileName);
+  if (!fs.existsSync(backupPath)) {
+    throw new Error("Backup file not found.");
+  }
+
+  const escapedPath = escapeSqlString(backupPath);
+  const copyOrder = ["groups", "devices", "device_schedules", "schedule_runs", "audit_logs", "scenes"];
+  const deleteOrder = [...copyOrder].reverse();
+
+  await runAsync("PRAGMA foreign_keys = OFF");
+  await runAsync(`ATTACH DATABASE '${escapedPath}' AS restore_db`);
+
+  let txOpen = false;
+  try {
+    await runAsync("BEGIN TRANSACTION");
+    txOpen = true;
+
+    for (const tableName of deleteOrder) {
+      await runAsync(`DELETE FROM ${tableName}`);
+    }
+
+    for (const tableName of copyOrder) {
+      await runAsync(`INSERT INTO ${tableName} SELECT * FROM restore_db.${tableName}`);
+    }
+
+    await runAsync("COMMIT");
+    txOpen = false;
+  } catch (error) {
+    if (txOpen) {
+      try {
+        await runAsync("ROLLBACK");
+      } catch {
+        // ignore rollback failures
+      }
+    }
+    throw error;
+  } finally {
+    try {
+      await runAsync("DETACH DATABASE restore_db");
+    } catch {
+      // ignore detach failures
+    }
+    try {
+      await runAsync("PRAGMA foreign_keys = ON");
+    } catch {
+      // ignore pragma reset failures
+    }
+  }
+
+  resetAllScheduleTasks();
+  await loadScheduleTasks();
+};
+
+const parseAllowedOrigins = () => {
+  const fromEnv = (process.env.ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return new Set([...DEFAULT_ALLOWED_ORIGINS, ...fromEnv]);
+};
+
+const allowedOrigins = parseAllowedOrigins();
+
+const buildRateLimitKey = (req, scope) => `${scope}:${req.ip || "unknown"}`;
+
+const cleanupRateLimitStore = () => {
+  const now = Date.now();
+  for (const [key, value] of rateLimiterStore.entries()) {
+    if (value.resetAt <= now) {
+      rateLimiterStore.delete(key);
+    }
+  }
+};
+
+const createRateLimitMiddleware = ({ scope, maxRequests, windowMs }) => (req, res, next) => {
+  const now = Date.now();
+  const key = buildRateLimitKey(req, scope);
+  const existing = rateLimiterStore.get(key);
+
+  if (!existing || existing.resetAt <= now) {
+    rateLimiterStore.set(key, { count: 1, resetAt: now + windowMs });
+    return next();
+  }
+
+  existing.count += 1;
+  if (existing.count > maxRequests) {
+    return res.status(429).json({
+      error: "Previše zahtjeva. Pokušaj ponovo uskoro.",
+      scope,
+      retryAfterMs: Math.max(0, existing.resetAt - now),
+    });
+  }
+
+  return next();
+};
+
+const trimArray = (arr, max) => {
+  if (arr.length <= max) {
+    return;
+  }
+  arr.splice(0, arr.length - max);
+};
+
+const recordRuntimeIssue = (kind, payload = {}) => {
+  runtimeIssues.push({
+    timestamp: new Date().toISOString(),
+    kind,
+    ...payload,
+  });
+  trimArray(runtimeIssues, MAX_RUNTIME_ISSUES);
+};
+
+process.on("unhandledRejection", (reason) => {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const stack = reason instanceof Error ? reason.stack : undefined;
+  recordRuntimeIssue("unhandledRejection", { message, stack });
+});
+
+process.on("uncaughtException", (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  const stack = error instanceof Error ? error.stack : undefined;
+  recordRuntimeIssue("uncaughtException", { message, stack });
+});
+
+const applySecurityHeaders = (req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  return next();
+};
+
 const ensureValidDeviceMac = async (ip, mac) => {
   const normalizedInputMac = normalizeMacToColon(mac);
   if (isLikelyValidMac(normalizedInputMac)) {
@@ -189,6 +428,100 @@ const selfHealDeviceMac = async (device, contextLabel = "device-action") => {
 
   console.warn(`${contextLabel}: invalid MAC (${device.mac}) and ARP recovery failed for ${device.name}`);
   return null;
+};
+
+const repairInvalidDeviceMacs = async (contextLabel = "mac-watchdog") => {
+  const devices = await allAsync(`SELECT id, name, ip, mac FROM devices`);
+  let repaired = 0;
+  let unresolved = 0;
+
+  for (const device of devices) {
+    const normalized = normalizeMacToColon(device.mac);
+    if (isLikelyValidMac(normalized)) {
+      continue;
+    }
+
+    const discoveredMac = await resolveMacFromArp(device.ip);
+    if (isLikelyValidMac(discoveredMac)) {
+      const finalMac = normalizeMacToColon(discoveredMac);
+      await runAsync(`UPDATE devices SET mac = ? WHERE id = ?`, [finalMac, device.id]);
+      repaired += 1;
+      console.log(`${contextLabel}: repaired MAC for ${device.name} (${device.ip}) => ${finalMac}`);
+    } else {
+      unresolved += 1;
+      console.warn(`${contextLabel}: unresolved invalid MAC for ${device.name} (${device.ip}) current=${device.mac}`);
+    }
+  }
+
+  if (repaired > 0 || unresolved > 0) {
+    console.log(`${contextLabel}: summary repaired=${repaired} unresolved=${unresolved}`);
+  }
+
+  return { repaired, unresolved };
+};
+
+const runMaintenanceCycle = async (trigger = "manual") => {
+  const startedAt = new Date().toISOString();
+  const maintenanceLabel = `maintenance-${String(trigger || "manual").toLowerCase().replace(/[^a-z0-9_-]/g, "-")}`;
+
+  let backup = null;
+  let macRepair = { repaired: 0, unresolved: 0 };
+  let dbOptimizeOk = true;
+  try {
+    cleanupRateLimitStore();
+    macRepair = await repairInvalidDeviceMacs(`maintenance-mac-heal:${trigger}`);
+    backup = await createDatabaseBackup(maintenanceLabel);
+
+    try {
+      await runAsync("PRAGMA optimize");
+    } catch (optError) {
+      dbOptimizeOk = false;
+      recordRuntimeIssue("maintenance-db-optimize-failed", { message: optError.message });
+    }
+
+    const summary = {
+      timestamp: startedAt,
+      trigger,
+      backupFile: backup?.fileName || null,
+      repairedMacs: macRepair.repaired,
+      unresolvedMacs: macRepair.unresolved,
+      dbOptimizeOk,
+      status: "success",
+    };
+
+    maintenanceHistory.push(summary);
+    trimArray(maintenanceHistory, MAX_MAINTENANCE_HISTORY);
+
+    await writeAuditLog({
+      action: "system:maintenance:run",
+      status: "success",
+      source: `maintenance-${trigger}`,
+      details: summary,
+    });
+
+    return summary;
+  } catch (error) {
+    const failed = {
+      timestamp: startedAt,
+      trigger,
+      backupFile: backup?.fileName || null,
+      repairedMacs: macRepair.repaired,
+      unresolvedMacs: macRepair.unresolved,
+      dbOptimizeOk,
+      status: "failed",
+      error: error.message,
+    };
+    maintenanceHistory.push(failed);
+    trimArray(maintenanceHistory, MAX_MAINTENANCE_HISTORY);
+    recordRuntimeIssue("maintenance-cycle-failed", { message: error.message, trigger });
+    await writeAuditLog({
+      action: "system:maintenance:run",
+      status: "failed",
+      source: `maintenance-${trigger}`,
+      details: failed,
+    });
+    throw error;
+  }
 };
 
 // WebSocket server will be initialized after HTTP server starts
@@ -863,8 +1196,36 @@ const executeScheduleAction = async (scheduleId) => {
   } catch (e) {}
 };
 
-app.use(cors());
-app.use(express.json());
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) {
+      return callback(null, true);
+    }
+    if (allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("CORS blocked: origin not allowed"));
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
+app.use(express.json({ limit: "100kb" }));
+app.use(applySecurityHeaders);
+app.use(createRateLimitMiddleware({
+  scope: "api",
+  maxRequests: API_RATE_LIMIT_MAX,
+  windowMs: API_RATE_LIMIT_WINDOW_MS,
+}));
+app.use((req, res, next) => {
+  if (["POST", "PUT", "DELETE", "PATCH"].includes(req.method)) {
+    return createRateLimitMiddleware({
+      scope: "control",
+      maxRequests: CONTROL_RATE_LIMIT_MAX,
+      windowMs: API_RATE_LIMIT_WINDOW_MS,
+    })(req, res, next);
+  }
+  return next();
+});
 
 // Request logger for debugging
 app.use((req, res, next) => {
@@ -876,6 +1237,9 @@ app.use((req, res, next) => {
 
 // Debug route: list registered routes
 app.get('/__routes', (req, res) => {
+  if (process.env.ENABLE_DEBUG_ROUTES !== "true") {
+    return res.status(404).json({ error: "Not found" });
+  }
   try {
     const routes = [];
     app._router.stack.forEach((r) => {
@@ -1385,10 +1749,11 @@ app.post("/devices/:id/restart", async (req, res) => {
 
     if (brand === "webos" || brand === "lg") {
       await selfHealDeviceMac(device, "Restart auto-fix");
+      const restartProfile = buildRestartProfile(device);
 
       // For webOS: power off via webOS, then WoL after 8s (non-blocking)
       res.json({ id: device.id, name: device.name, restarted: true, method: "webos" });
-      sendWebosRestart(device.ip, device.mac).then(async (restarted) => {
+      sendWebosRestart(device.ip, device.mac, restartProfile).then(async (restarted) => {
         if (restarted) {
           await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
           try { await broadcastDeviceState(device.id); } catch (e) {}
@@ -1471,7 +1836,9 @@ app.post("/devices/restart", async (req, res) => {
     for (const device of devices) {
       const brand = (device.brand || "").trim().toLowerCase();
       if (brand === "webos" || brand === "lg") {
-        sendWebosRestart(device.ip, device.mac).then(async (ok) => {
+        await selfHealDeviceMac(device, "Bulk restart auto-fix");
+        const restartProfile = buildRestartProfile(device);
+        sendWebosRestart(device.ip, device.mac, restartProfile).then(async (ok) => {
           if (ok) {
             await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
             try { await broadcastDeviceState(device.id); } catch (e) {}
@@ -1644,7 +2011,9 @@ app.post("/groups/:id/restart", async (req, res) => {
     for (const device of devices) {
       const brand = (device.brand || "").trim().toLowerCase();
       if (brand === "webos" || brand === "lg") {
-        sendWebosRestart(device.ip, device.mac).then(async (ok) => {
+        await selfHealDeviceMac(device, "Group restart auto-fix");
+        const restartProfile = buildRestartProfile(device);
+        sendWebosRestart(device.ip, device.mac, restartProfile).then(async (ok) => {
           if (ok) {
             await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
             try { await broadcastDeviceState(device.id); } catch (e) {}
@@ -1896,6 +2265,141 @@ app.get("/health/summary", async (req, res) => {
   }
 });
 
+app.get("/system/backups", async (req, res) => {
+  try {
+    const backups = listBackups();
+    res.json({
+      backups,
+      count: backups.length,
+      backupDir: BACKUP_DIR,
+      maxBackups: MAX_BACKUP_FILES,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/system/backups", async (req, res) => {
+  try {
+    const label = req.body?.label || "manual";
+    const backup = await createDatabaseBackup(label);
+    await writeAuditLog({
+      action: "system:backup:create",
+      status: "success",
+      source: "manual-backup",
+      details: { fileName: backup.fileName },
+    });
+
+    res.json({
+      success: true,
+      backup,
+      backups: listBackups(),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/system/backups/restore", async (req, res) => {
+  try {
+    const fileName = req.body?.fileName;
+    if (!fileName) {
+      return res.status(400).json({ error: "fileName is required." });
+    }
+
+    await restoreDatabaseFromBackup(fileName);
+    await writeAuditLog({
+      action: "system:backup:restore",
+      status: "success",
+      source: "manual-restore",
+      details: { fileName },
+    });
+
+    res.json({
+      success: true,
+      restoredFrom: fileName,
+      backups: listBackups(),
+    });
+  } catch (error) {
+    await writeAuditLog({
+      action: "system:backup:restore",
+      status: "failed",
+      source: "manual-restore",
+      details: { error: error.message },
+    });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/system/maintenance", async (req, res) => {
+  try {
+    const backups = listBackups();
+    const invalidMacRows = await allAsync(
+      `SELECT id, name, ip, mac FROM devices ORDER BY id ASC`
+    );
+    const invalidMacDevices = invalidMacRows.filter((row) => !isLikelyValidMac(normalizeMacToColon(row.mac)));
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      backups: {
+        count: backups.length,
+        latest: backups[0] || null,
+      },
+      invalidMacDevices,
+      recommendations: [
+        "Napravite backup prije većih promjena.",
+        "Provjerite restart flow za barem jedan LG/webOS uređaj sedmično.",
+        "Pratite audit log za ponavljane failed akcije.",
+      ],
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/system/maintenance/run", async (req, res) => {
+  try {
+    const trigger = req.body?.trigger || "manual-api";
+    const result = await runMaintenanceCycle(trigger);
+    res.json({ success: true, result });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/system/diagnostics", async (req, res) => {
+  try {
+    const recentFailedAudit = await allAsync(
+      `SELECT id, action, status, source, created_at, details
+       FROM audit_logs
+       WHERE status LIKE 'failed%'
+       ORDER BY id DESC
+       LIMIT 30`
+    );
+    const lastMaintenance = maintenanceHistory.length ? maintenanceHistory[maintenanceHistory.length - 1] : null;
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      config: {
+        weeklyMaintenanceCron: WEEKLY_MAINTENANCE_CRON,
+        autoBackupIntervalMs: AUTO_BACKUP_INTERVAL_MS,
+        macSelfHealIntervalMs: MAC_SELF_HEAL_INTERVAL_MS,
+        maxBackups: MAX_BACKUP_FILES,
+        runtimeIssueAlertThreshold: RUNTIME_ISSUE_ALERT_THRESHOLD,
+      },
+      lastMaintenance,
+      maintenanceHistory: maintenanceHistory.slice(-10),
+      runtimeIssues: runtimeIssues.slice(-30),
+      recentFailedAudit: recentFailedAudit.map((row) => ({
+        ...row,
+        details: safeJsonParse(row.details, null),
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/scenes", async (req, res) => {
   try {
     const scenes = await allAsync(`SELECT * FROM scenes ORDER BY name COLLATE NOCASE`);
@@ -2070,8 +2574,55 @@ app.post("/scenes/:id/execute", async (req, res) => {
   }
 });
 
+app.use((err, req, res, next) => {
+  recordRuntimeIssue("express-error", {
+    message: err?.message || "Unknown express error",
+    stack: err?.stack,
+    method: req.method,
+    path: req.originalUrl,
+  });
+
+  if (res.headersSent) {
+    return next(err);
+  }
+
+  res.status(500).json({ error: err?.message || "Internal server error" });
+});
+
 initDatabase()
   .then(async () => {
+    ensureBackupDirectory();
+
+    cleanupRateLimitStore();
+    await runMaintenanceCycle("startup");
+
+    setInterval(() => {
+      repairInvalidDeviceMacs("periodic-mac-watchdog").catch((error) => {
+        console.error("periodic-mac-watchdog failed:", error.message);
+      });
+      cleanupRateLimitStore();
+    }, MAC_SELF_HEAL_INTERVAL_MS);
+
+    setInterval(() => {
+      createDatabaseBackup("auto").then((created) => {
+        console.log(`auto-backup: created ${created.fileName}`);
+      }).catch((error) => {
+        console.error("auto-backup failed:", error.message);
+      });
+    }, AUTO_BACKUP_INTERVAL_MS);
+
+    if (cron.validate(WEEKLY_MAINTENANCE_CRON)) {
+      cron.schedule(WEEKLY_MAINTENANCE_CRON, () => {
+        runMaintenanceCycle("weekly-cron").then((summary) => {
+          console.log(`weekly-maintenance: ok backup=${summary.backupFile}`);
+        }).catch((error) => {
+          console.error("weekly-maintenance failed:", error.message);
+        });
+      });
+    } else {
+      console.warn(`Invalid WEEKLY_MAINTENANCE_CRON: ${WEEKLY_MAINTENANCE_CRON}`);
+    }
+
     await loadScheduleTasks();
     // debug: list registered routes
     try {

@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "poweron": "node power-on-all.js"
+    "poweron": "node power-on-all.js",
+    "test": "node restart-invalid-mac.test.js",
+    "test:restart": "node restart-invalid-mac.test.js"
   },
   "keywords": [],
   "author": "",
