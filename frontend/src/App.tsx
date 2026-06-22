@@ -959,7 +959,7 @@ function App() {
 
       const data = await response.json();
       if (data.restarted && data.method === "webos") {
-        showToast("success", "Restart pokrenuto", "TV se gasi... pokretat će se automatski za ~10 sekundi.");
+        showToast("success", "Restart pokrenuto", "TV se gasi... pokrenut će se automatski za otprilike 15-30 sekundi.");
       } else if (data.restarted) {
         showToast("success", "Restart poslan", `Zahtjev poslan za ${data.name || "uređaj"}.`);
       } else {
@@ -1076,6 +1076,12 @@ function App() {
         const device = discoveredDevices.find((d) => d.ip === ip);
         if (!device) continue;
 
+        const candidateMac = (device.mac || "").trim();
+        if (!isValidMac(candidateMac)) {
+          failureCount++;
+          continue;
+        }
+
         try {
           const response = await fetch(`${baseUrl}/devices`, {
             method: "POST",
@@ -1083,7 +1089,7 @@ function App() {
             body: JSON.stringify({
               name: device.name || `TV (${ip})`,
               ip: device.ip,
-              mac: device.mac || "00:00:00:00:00:00",
+              mac: candidateMac,
               brand: device.brand || "generic",
               groupId: null,
             }),
@@ -1106,6 +1112,14 @@ function App() {
       if (successCount > 0) {
         showToast("success", "Uspješno dodano", `${successCount} TV-a dodano u bazu`);
         await refreshAll();
+      }
+
+      if (failureCount > 0) {
+        showToast(
+          "info",
+          "Neki uređaji preskočeni",
+          `${failureCount} uređaj(a) nije dodano jer MAC nije bio validan. Pokreni skeniranje ponovo dok je TV uključen.`
+        );
       }
 
       if (failureCount > 0) {
@@ -1388,7 +1402,7 @@ function App() {
       body: JSON.stringify({ ids: selectedIds }),
     });
 
-    showToast("success", "Restart pokrenuto", `Restart pokrenut za ${selectedIds.length} uređaj(a). WebOS TV-i se gase i palju automatski za ~10 sekundi.`);
+    showToast("success", "Restart pokrenuto", `Restart pokrenut za ${selectedIds.length} uređaj(a). WebOS TV-i se gase i pale automatski za otprilike 15-30 sekundi.`);
   };
 
   // @ts-ignore - unused but may be needed for future use
@@ -1444,7 +1458,7 @@ function App() {
       },
     });
 
-    showToast("success", "Restart pokrenuto", "WebOS TV-i se gase i palju automatski za ~10 sekundi.");
+    showToast("success", "Restart pokrenuto", "WebOS TV-i se gase i pale automatski za otprilike 15-30 sekundi.");
   };
 
   const handlePowerOnGroup = async (groupId: number) => {

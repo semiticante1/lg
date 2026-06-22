@@ -17,6 +17,25 @@ const normalizeBrand = (brand) => {
   return brand.trim().toLowerCase();
 };
 
+const isLikelyValidMac = (mac) => {
+  if (!mac || typeof mac !== "string") {
+    return false;
+  }
+
+  const normalized = mac.trim().toLowerCase();
+  const macPattern = /^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/;
+  if (!macPattern.test(normalized)) {
+    return false;
+  }
+
+  const onlyHex = normalized.replace(/[:-]/g, "");
+  if (onlyHex === "000000000000" || onlyHex === "ffffffffffff") {
+    return false;
+  }
+
+  return true;
+};
+
 const readWebosClientKey = () => {
   if (process.env.WEBOS_CLIENT_KEY) {
     return process.env.WEBOS_CLIENT_KEY.trim();
@@ -167,14 +186,18 @@ const setWebosVolume = async (ip, volume) => {
   );
 };
 
-const wakeDevice = async (mac) =>
+const wakeDevice = async (mac, options = {}) =>
   new Promise((resolve) => {
-    if (!mac) {
+    if (!isLikelyValidMac(mac)) {
       return resolve(false);
     }
 
     try {
-      wol.wake(mac, (err) => {
+      const wakeOptions = {
+        port: 9,
+        ...(options.address ? { address: options.address } : {}),
+      };
+      wol.wake(mac, wakeOptions, (err) => {
         resolve(!err);
       });
     } catch {
@@ -365,9 +388,62 @@ const querySamsungPowerState = async (ip) => {
   return alive ? "On" : "Off";
 };
 
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const getWakeTargets = (ip) => {
+  const targets = new Set(["255.255.255.255"]);
+  if (typeof ip === "string") {
+    const parts = ip.trim().split(".");
+    if (parts.length === 4 && parts.every((p) => /^\d+$/.test(p) && Number(p) >= 0 && Number(p) <= 255)) {
+      targets.add(`${parts[0]}.${parts[1]}.${parts[2]}.255`);
+    }
+  }
+  return Array.from(targets);
+};
+
+const wakeDeviceAcrossTargets = async (mac, ip, logPrefix = "") => {
+  const targets = getWakeTargets(ip);
+  let anySent = false;
+
+  for (const target of targets) {
+    const sent = await wakeDevice(mac, { address: target });
+    anySent = anySent || sent;
+    if (logPrefix) {
+      console.log(`${logPrefix} WoL target=${target} sent=${sent}`);
+    }
+    await delay(250);
+  }
+
+  return anySent;
+};
+
 const sendWebosRestart = async (ip, mac) => {
-  // Step 1: Turn off via webOS
-  await sendWebosRequest(
+  const logPrefix = `[RestartFlow ip=${ip || "n/a"} mac=${mac || "n/a"}]`;
+  console.log(`${logPrefix} start`);
+
+  // First try native reboot. If supported by TV firmware, this avoids WoL entirely.
+  const rebooted = await sendWebosRequest(
+    ip,
+    {
+      type: "request",
+      id: "restart_reboot",
+      uri: "ssap://system/reboot",
+      payload: {},
+    },
+    ["CONTROL_POWER"]
+  );
+  console.log(`${logPrefix} directRebootAck=${rebooted}`);
+  if (rebooted) {
+    return true;
+  }
+
+  if (!isLikelyValidMac(mac)) {
+    console.log(`${logPrefix} abort: invalid MAC for WoL fallback`);
+    return false;
+  }
+
+  // Step 1: Turn off via webOS.
+  const turnedOff = await sendWebosRequest(
     ip,
     {
       type: "request",
@@ -377,9 +453,60 @@ const sendWebosRestart = async (ip, mac) => {
     },
     ["CONTROL_POWER"]
   );
-  // Step 2: Wait 8s then wake via WoL
-  await new Promise((r) => setTimeout(r, 8000));
-  return wakeDevice(mac);
+  console.log(`${logPrefix} turnOffAck=${turnedOff}`);
+
+  if (!turnedOff) {
+    // Some TVs execute turnOff but fail to send a clean response/ack.
+    // Continue with wake sequence anyway instead of aborting restart.
+    console.log(`${logPrefix} warning: no turnOff ack, continuing with fallback wake sequence`);
+  }
+
+  // Step 2: Give TV time to fully power down before sending WoL.
+  // Some LG/webOS models keep NIC in transition longer than expected.
+  await delay(20000);
+  console.log(`${logPrefix} shutdown wait complete`);
+
+  // Step 3: WoL can be missed while NIC is transitioning during shutdown,
+  // so retry over a longer window before declaring restart failed.
+  const maxAttempts = 8;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    console.log(`${logPrefix} attempt=${attempt}/${maxAttempts} begin`);
+
+    // Send a small burst each attempt to improve delivery reliability.
+    let wakeSent = false;
+    for (let burst = 0; burst < 3; burst += 1) {
+      const sent = await wakeDeviceAcrossTargets(mac, ip, `${logPrefix} attempt=${attempt} burst=${burst + 1}`);
+      wakeSent = wakeSent || sent;
+      console.log(`${logPrefix} attempt=${attempt} burst=${burst + 1} sentAny=${sent}`);
+      await delay(400);
+    }
+
+    if (!wakeSent) {
+      console.log(`${logPrefix} attempt=${attempt} no WoL send confirmed`);
+      await delay(5000);
+      continue;
+    }
+
+    if (!ip) {
+      console.log(`${logPrefix} attempt=${attempt} success (no IP to verify)`);
+      return true;
+    }
+
+    await delay(6000);
+    const alive = await pingDevice(ip);
+    console.log(`${logPrefix} attempt=${attempt} pingAlive=${alive}`);
+    if (alive) {
+      console.log(`${logPrefix} success`);
+      return true;
+    }
+
+    if (attempt < maxAttempts) {
+      await delay(7000);
+    }
+  }
+
+  console.log(`${logPrefix} failed after ${maxAttempts} attempts`);
+  return false;
 };
 
 const powerOnDevice = async (device) => {
@@ -460,6 +587,7 @@ const queryDevicePowerState = async (device) => {
 
 module.exports = {
   normalizeBrand,
+  isLikelyValidMac,
   wakeDevice,
   pingDevice,
   powerOnDevice,

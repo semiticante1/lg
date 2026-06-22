@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const { exec } = require("child_process");
 const sqlite3 = require("sqlite3").verbose();
 const ping = require("ping");
 const wol = require("wake_on_lan");
@@ -14,6 +16,7 @@ const {
   powerOffDevice,
   queryDevicePowerState,
   wakeDevice,
+  isLikelyValidMac,
   launchWebosApp,
   setWebosMute,
   adjustWebosVolume,
@@ -83,6 +86,110 @@ const safeJsonParse = (value, fallback = {}) => {
 };
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const execAsync = (command) =>
+  new Promise((resolve, reject) => {
+    exec(command, { timeout: 7000 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+  });
+
+const normalizeMacToColon = (mac) => {
+  if (!mac || typeof mac !== "string") {
+    return null;
+  }
+
+  const compact = mac.trim().replace(/-/g, ":").toUpperCase();
+  return compact;
+};
+
+const findMacInTextForIp = (text, ip) => {
+  if (!text || !ip) {
+    return null;
+  }
+
+  const escapedIp = ip.replace(/\./g, "\\.");
+  const lineRegex = new RegExp(`${escapedIp}\\s+([0-9a-fA-F:-]{17})`, "i");
+  const lineMatch = text.match(lineRegex);
+  if (lineMatch && lineMatch[1]) {
+    return normalizeMacToColon(lineMatch[1]);
+  }
+
+  const genericMatch = text.match(/([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}/);
+  return genericMatch ? normalizeMacToColon(genericMatch[0]) : null;
+};
+
+const resolveMacFromArp = async (ip) => {
+  if (!ip) {
+    return null;
+  }
+
+  const platform = os.platform();
+  const commands = platform === "win32"
+    ? [`arp -a ${ip}`, "arp -a"]
+    : [`arp -an ${ip}`, "arp -an"];
+
+  for (const command of commands) {
+    try {
+      const { stdout } = await execAsync(command);
+      const found = findMacInTextForIp(stdout || "", ip);
+      if (found) {
+        return found;
+      }
+    } catch {
+      // try next command
+    }
+  }
+
+  return null;
+};
+
+const ensureValidDeviceMac = async (ip, mac) => {
+  const normalizedInputMac = normalizeMacToColon(mac);
+  if (isLikelyValidMac(normalizedInputMac)) {
+    return { ok: true, mac: normalizedInputMac, source: "input" };
+  }
+
+  const discoveredMac = await resolveMacFromArp(ip);
+  if (isLikelyValidMac(discoveredMac)) {
+    return { ok: true, mac: normalizeMacToColon(discoveredMac), source: "arp" };
+  }
+
+  return {
+    ok: false,
+    mac: normalizedInputMac,
+    source: "invalid",
+    reason: "MAC adresa nije ispravna i automatski oporavak iz ARP tabele nije uspio.",
+  };
+};
+
+const selfHealDeviceMac = async (device, contextLabel = "device-action") => {
+  if (!device) {
+    return null;
+  }
+
+  const normalizedCurrent = normalizeMacToColon(device.mac);
+  if (isLikelyValidMac(normalizedCurrent)) {
+    device.mac = normalizedCurrent;
+    return normalizedCurrent;
+  }
+
+  const discoveredMac = await resolveMacFromArp(device.ip);
+  if (isLikelyValidMac(discoveredMac)) {
+    const normalizedDiscovered = normalizeMacToColon(discoveredMac);
+    await runAsync(`UPDATE devices SET mac = ? WHERE id = ?`, [normalizedDiscovered, device.id]);
+    device.mac = normalizedDiscovered;
+    console.log(`${contextLabel}: updated MAC for ${device.name} to ${normalizedDiscovered}`);
+    return normalizedDiscovered;
+  }
+
+  console.warn(`${contextLabel}: invalid MAC (${device.mac}) and ARP recovery failed for ${device.name}`);
+  return null;
+};
 
 // WebSocket server will be initialized after HTTP server starts
 let wss = null;
@@ -869,9 +976,14 @@ app.post("/devices", async (req, res) => {
       return res.status(400).json({ error: "Missing device fields." });
     }
 
+    const macCheck = await ensureValidDeviceMac(ip, mac);
+    if (!macCheck.ok) {
+      return res.status(400).json({ error: macCheck.reason });
+    }
+
     const result = await runAsync(
       `INSERT INTO devices (name, ip, mac, brand, status, power_state, group_id) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [name, ip, mac, brand || "generic", "Offline", "Off", groupId || null]
+      [name, ip, macCheck.mac, brand || "generic", "Offline", "Off", groupId || null]
     );
 
     const device = await getAsync(
@@ -890,9 +1002,18 @@ app.put("/devices/:id", async (req, res) => {
   try {
     const { name, ip, mac, brand, groupId } = req.body;
 
+    if (!name || !ip || !mac) {
+      return res.status(400).json({ error: "Missing device fields." });
+    }
+
+    const macCheck = await ensureValidDeviceMac(ip, mac);
+    if (!macCheck.ok) {
+      return res.status(400).json({ error: macCheck.reason });
+    }
+
     await runAsync(
       `UPDATE devices SET name = ?, ip = ?, mac = ?, brand = ?, group_id = ? WHERE id = ?`,
-      [name, ip, mac, brand || "generic", groupId || null, req.params.id]
+      [name, ip, macCheck.mac, brand || "generic", groupId || null, req.params.id]
     );
 
     res.json({ success: true });
@@ -1168,6 +1289,11 @@ app.post("/devices/:id/poweron", async (req, res) => {
       });
     }
 
+    const brand = (device.brand || "").trim().toLowerCase();
+    if (brand === "webos" || brand === "lg" || brand === "generic") {
+      await selfHealDeviceMac(device, "PowerOn auto-fix");
+    }
+
     const success = await powerOnDevice(device);
     const newState = success ? "On" : device.power_state || device.powerState || "Off";
 
@@ -1258,20 +1384,36 @@ app.post("/devices/:id/restart", async (req, res) => {
     });
 
     if (brand === "webos" || brand === "lg") {
+      await selfHealDeviceMac(device, "Restart auto-fix");
+
       // For webOS: power off via webOS, then WoL after 8s (non-blocking)
       res.json({ id: device.id, name: device.name, restarted: true, method: "webos" });
-      sendWebosRestart(device.ip, device.mac).then(async () => {
-        await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-        try { await broadcastDeviceState(device.id); } catch (e) {}
-        await writeAuditLog({
-          entityType: "device",
-          entityId: device.id,
-          deviceId: device.id,
-          action: "restart",
-          status: "success",
-          source: "manual-restart",
-          details: { method: "webos" },
-        });
+      sendWebosRestart(device.ip, device.mac).then(async (restarted) => {
+        if (restarted) {
+          await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+          try { await broadcastDeviceState(device.id); } catch (e) {}
+          await writeAuditLog({
+            entityType: "device",
+            entityId: device.id,
+            deviceId: device.id,
+            action: "restart",
+            status: "success",
+            source: "manual-restart",
+            details: { method: "webos" },
+          });
+          console.log(`Restart flow success for ${device.name}`);
+        } else {
+          await writeAuditLog({
+            entityType: "device",
+            entityId: device.id,
+            deviceId: device.id,
+            action: "restart",
+            status: "failed",
+            source: "manual-restart",
+            details: { method: "webos", reason: "restart flow returned false (check MAC or firmware reboot support)" },
+          });
+          console.warn(`Restart flow failed for ${device.name}: returned false`);
+        }
       }).catch(async (e) => {
         await writeAuditLog({
           entityType: "device",
@@ -1329,9 +1471,13 @@ app.post("/devices/restart", async (req, res) => {
     for (const device of devices) {
       const brand = (device.brand || "").trim().toLowerCase();
       if (brand === "webos" || brand === "lg") {
-        sendWebosRestart(device.ip, device.mac).then(async () => {
-          await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-          try { await broadcastDeviceState(device.id); } catch (e) {}
+        sendWebosRestart(device.ip, device.mac).then(async (ok) => {
+          if (ok) {
+            await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+            try { await broadcastDeviceState(device.id); } catch (e) {}
+          } else {
+            console.warn(`Restart flow failed for ${device.name}: returned false`);
+          }
         }).catch((e) => console.error(`Restart error for ${device.name}:`, e));
       } else {
         wakeDevice(device.mac).then(async (ok) => {
@@ -1498,9 +1644,13 @@ app.post("/groups/:id/restart", async (req, res) => {
     for (const device of devices) {
       const brand = (device.brand || "").trim().toLowerCase();
       if (brand === "webos" || brand === "lg") {
-        sendWebosRestart(device.ip, device.mac).then(async () => {
-          await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
-          try { await broadcastDeviceState(device.id); } catch (e) {}
+        sendWebosRestart(device.ip, device.mac).then(async (ok) => {
+          if (ok) {
+            await runAsync(`UPDATE devices SET power_state = 'On' WHERE id = ?`, [device.id]);
+            try { await broadcastDeviceState(device.id); } catch (e) {}
+          } else {
+            console.warn(`Group restart flow failed for ${device.name}: returned false`);
+          }
         }).catch((e) => console.error(`Group restart error for ${device.name}:`, e));
       } else {
         wakeDevice(device.mac).then(async (ok) => {
