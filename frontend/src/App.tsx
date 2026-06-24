@@ -2645,8 +2645,8 @@ function App() {
                 <p className="empty-log">Nema zabilježenih aktivnosti još.</p>
               ) : (
                 <ul className="activity-log">
-                  {recentDeviceEvents.map((entry) => (
-                    <li key={`${entry.deviceId}-${entry.time}`}>
+                  {recentDeviceEvents.map((entry, index) => (
+                    <li key={`${entry.deviceId}-${entry.time}-${index}`}>
                       <strong>{entry.timestamp}</strong> - <span>{entry.deviceName}</span> - {entry.status} - {entry.note}
                     </li>
                   ))}
