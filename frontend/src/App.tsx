@@ -86,6 +86,8 @@ function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showAssignGroupModal, setShowAssignGroupModal] = useState(false);
   const [selectedAssignGroupId, setSelectedAssignGroupId] = useState<number | null>(null);
+  const [volumeValue, setVolumeValue] = useState("100");
+  const [launchTarget, setLaunchTarget] = useState("");
   const [messageModal, setMessageModal] = useState<MessageModalState | null>(null);
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
   const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
@@ -1418,7 +1420,7 @@ function App() {
     setSelectedDiscoveredDevices(new Set());
   };
 
-  const handleSendDeviceAction = async (id: number, action: string) => {
+  const handleSendDeviceAction = async (id: number, action: string, params: Record<string, any> = {}) => {
     if (!id || !action) return;
     try {
       const device = devices.find((d) => d.id === id);
@@ -1431,7 +1433,7 @@ function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action,
-          action_params: {},
+          action_params: params,
         }),
       });
       if (!response.ok) {
@@ -2926,6 +2928,88 @@ function App() {
                   >
                     Restart uređaja
                   </button>
+                  {(["webos", "samsung"].includes(selectedDevice.brand?.toLowerCase() || "")) && (
+                    <>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        onClick={() => handleSendDeviceAction(selectedDevice.id, "mute")}
+                      >
+                        🔇 Mute
+                      </button>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        onClick={() => handleSendDeviceAction(selectedDevice.id, "unmute")}
+                      >
+                        🔊 Unmute
+                      </button>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        onClick={() => handleSendDeviceAction(selectedDevice.id, "volumeUp")}
+                      >
+                        🔼 Vol+
+                      </button>
+                      <button
+                        type="button"
+                        className="action-btn"
+                        onClick={() => handleSendDeviceAction(selectedDevice.id, "volumeDown")}
+                      >
+                        🔽 Vol-
+                      </button>
+                      <div className="volume-set-row">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={volumeValue}
+                          onChange={(e) => setVolumeValue(e.target.value)}
+                          placeholder="0-100"
+                          className="small-input"
+                        />
+                        <button
+                          type="button"
+                          className="action-btn"
+                          disabled={
+                            volumeValue.trim() === "" ||
+                            Number.isNaN(Number(volumeValue)) ||
+                            Number(volumeValue) < 0 ||
+                            Number(volumeValue) > 100
+                          }
+                          onClick={() => {
+                            const volume = Number(volumeValue);
+                            if (!Number.isNaN(volume) && volume >= 0 && volume <= 100) {
+                              handleSendDeviceAction(selectedDevice.id, "setVolume", { volume });
+                            }
+                          }}
+                        >
+                          🎚️ Postavi volumen
+                        </button>
+                      </div>
+                      <div className="launch-app-row">
+                        <input
+                          type="text"
+                          value={launchTarget}
+                          onChange={(e) => setLaunchTarget(e.target.value)}
+                          placeholder="App ID ili URL"
+                          className="small-input"
+                        />
+                        <button
+                          type="button"
+                          className="action-btn"
+                          disabled={!launchTarget.trim()}
+                          onClick={() => {
+                            if (launchTarget.trim()) {
+                              handleSendDeviceAction(selectedDevice.id, "launchApp", { target: launchTarget.trim() });
+                            }
+                          }}
+                        >
+                          🚀 Otvori aplikaciju
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div className="detail-tabs">
                   <button
@@ -3250,6 +3334,56 @@ function App() {
                         <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeDown"); }}>
                           🔽 Vol-
                         </button>
+                        <div className="volume-set-row">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={volumeValue}
+                            onChange={(e) => setVolumeValue(e.target.value)}
+                            placeholder="0-100"
+                            className="small-input"
+                          />
+                          <button
+                            type="button"
+                            className="action-btn"
+                            disabled={
+                              volumeValue.trim() === "" ||
+                              Number.isNaN(Number(volumeValue)) ||
+                              Number(volumeValue) < 0 ||
+                              Number(volumeValue) > 100
+                            }
+                            onClick={() => {
+                              const volume = Number(volumeValue);
+                              if (!Number.isNaN(volume) && volume >= 0 && volume <= 100) {
+                                handleSendDeviceAction(viewModalDeviceInfo.id, "setVolume", { volume });
+                              }
+                            }}
+                          >
+                            🎚️ Postavi volumen
+                          </button>
+                        </div>
+                        <div className="launch-app-row">
+                          <input
+                            type="text"
+                            value={launchTarget}
+                            onChange={(e) => setLaunchTarget(e.target.value)}
+                            placeholder="App ID ili URL"
+                            className="small-input"
+                          />
+                          <button
+                            type="button"
+                            className="action-btn"
+                            disabled={!launchTarget.trim()}
+                            onClick={() => {
+                              if (launchTarget.trim()) {
+                                handleSendDeviceAction(viewModalDeviceInfo.id, "launchApp", { target: launchTarget.trim() });
+                              }
+                            }}
+                          >
+                            🚀 Otvori aplikaciju
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
