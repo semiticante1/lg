@@ -176,34 +176,97 @@ function App() {
   // WebSocket client to receive immediate device state updates from backend
   useEffect(() => {
     let ws: WebSocket | null = null;
-    try {
-      const wsUrl = baseUrl.replace(/^http/, 'ws');
-      ws = new WebSocket(wsUrl);
-      ws.onopen = () => {
-        console.log('WS connected to', wsUrl);
-      };
-      ws.onmessage = (ev) => {
-        try {
-          const msg = JSON.parse(ev.data);
-          if (msg.type === 'device:update' && msg.device) {
-            const dev = msg.device;
-            setDevices((prev) => prev.map((d) => (d.id === dev.id ? { ...d, ...dev, powerState: dev.power_state || dev.powerState } : d)));
-            recordDeviceEvent({ ...(devices.find((x) => x.id === dev.id) || dev), powerState: dev.power_state || dev.powerState }, 'State updated from server');
-          } else if (msg.type === 'devices:init' && Array.isArray(msg.devices)) {
-            setDevices(msg.devices.map((d: any) => ({ ...d, powerState: d.power_state || d.powerState || 'Off' })));
-          }
-        } catch (e) {
-          console.error('WS message parse error', e);
+    let reconnectTimer: number | null = null;
+    let reconnectAttempts = 0;
+    let keepTrying = true;
+    let cleanupRequested = false;
+
+    const wsUrl = baseUrl.replace(/^http/, 'ws');
+
+    let didOpen = false;
+
+    const connect = async () => {
+      try {
+        const healthResponse = await fetch(`${baseUrl}/health/summary`, { cache: 'no-store' });
+        if (!healthResponse.ok) {
+          throw new Error(`Health check failed with status ${healthResponse.status}`);
         }
-      };
-      ws.onclose = () => console.log('WS closed');
-      ws.onerror = (e) => console.error('WS error', e);
-    } catch (e) {
-      console.error('WS init failed', e);
-    }
+      } catch (e) {
+        if (!keepTrying) return;
+        reconnectAttempts += 1;
+        const timeout = Math.min(1000 * 2 ** reconnectAttempts, 30000);
+        reconnectTimer = window.setTimeout(connect, timeout);
+        console.warn('WS backend not ready, retrying...', e);
+        return;
+      }
+
+      try {
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          didOpen = true;
+          console.log('WS connected to', wsUrl);
+          reconnectAttempts = 0;
+        };
+
+        ws.onmessage = (ev) => {
+          try {
+            const msg = JSON.parse(ev.data);
+            if (msg.type === 'device:update' && msg.device) {
+              const dev = msg.device;
+              setDevices((prev) => prev.map((d) => (d.id === dev.id ? { ...d, ...dev, powerState: dev.power_state || dev.powerState } : d)));
+              recordDeviceEvent({ ...(devices.find((x) => x.id === dev.id) || dev), powerState: dev.power_state || dev.powerState }, 'State updated from server');
+            } else if (msg.type === 'devices:init' && Array.isArray(msg.devices)) {
+              setDevices(msg.devices.map((d: any) => ({ ...d, powerState: d.power_state || d.powerState || 'Off' })));
+            }
+          } catch (e) {
+            console.error('WS message parse error', e);
+          }
+        };
+
+        ws.onclose = () => {
+          if (cleanupRequested) return;
+          if (!didOpen) return;
+          console.log('WS closed');
+          if (!keepTrying) return;
+          reconnectAttempts += 1;
+          const timeout = Math.min(1000 * 2 ** reconnectAttempts, 30000);
+          reconnectTimer = window.setTimeout(connect, timeout);
+        };
+
+        ws.onerror = (e) => {
+          if (cleanupRequested) return;
+          if (!didOpen) {
+            console.warn('WS connection failed, retrying...');
+            return;
+          }
+          console.error('WS error', e);
+        };
+      } catch (e) {
+        console.error('WS init failed', e);
+        if (keepTrying) {
+          reconnectAttempts += 1;
+          const timeout = Math.min(1000 * 2 ** reconnectAttempts, 30000);
+          reconnectTimer = window.setTimeout(connect, timeout);
+        }
+      }
+    };
+
+    connect();
 
     return () => {
-      try { ws?.close(); } catch (e) {}
+      keepTrying = false;
+      cleanupRequested = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+      }
+      if (ws && ws.readyState !== WebSocket.CLOSING && ws.readyState !== WebSocket.CLOSED) {
+        try {
+          ws.close();
+        } catch (e) {
+          console.warn('WS cleanup failed', e);
+        }
+      }
     };
   }, [baseUrl]);
 
@@ -2592,6 +2655,8 @@ function App() {
             </div>
 
             <input
+              id="device-search"
+              name="deviceSearch"
               className="search-box"
               placeholder="Pretraži uređaj..."
               value={search}
@@ -2600,6 +2665,8 @@ function App() {
 
             <div className="filters">
               <select
+                id="filter-group"
+                name="filterGroup"
                 className="small-select select-box"
                 value={groupFilter ?? ""}
                 onChange={(e) =>
@@ -2615,6 +2682,8 @@ function App() {
                 ))}
               </select>
               <select
+                id="filter-status"
+                name="filterStatus"
                 className="small-select select-box"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -2624,6 +2693,8 @@ function App() {
                 <option value="offline">Samo offline</option>
               </select>
               <select
+                id="filter-power"
+                name="filterPower"
                 className="small-select select-box"
                 value={powerFilter}
                 onChange={(e) => setPowerFilter(e.target.value)}
@@ -2633,6 +2704,8 @@ function App() {
                 <option value="off">Samo ugašeni</option>
               </select>
               <select
+                id="filter-activity"
+                name="filterActivity"
                 className="small-select select-box"
                 value={activityFilter}
                 onChange={(e) => setActivityFilter(e.target.value)}
@@ -2644,6 +2717,8 @@ function App() {
                 <option value="inactive30d">Neaktivni &gt; 30d</option>
               </select>
               <input
+                id="filter-registered-from"
+                name="filterRegisteredFrom"
                 type="date"
                 className="small-input"
                 value={registrationFrom}
@@ -2651,6 +2726,8 @@ function App() {
                 title="Registrirano od"
               />
               <input
+                id="filter-registered-to"
+                name="filterRegisteredTo"
                 type="date"
                 className="small-input"
                 value={registrationTo}

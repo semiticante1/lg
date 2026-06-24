@@ -47,21 +47,29 @@ export default function DeviceEditorModal({
         <h2>{editingId !== null ? "Uredi uredaj" : "Dodaj uredaj"}</h2>
 
         <input
+          id="device-name"
+          name="deviceName"
           value={deviceName}
           onChange={(e) => onDeviceNameChange(e.target.value)}
           placeholder="Naziv uređaja"
         />
         <input
+          id="device-ip"
+          name="deviceIp"
           value={deviceIp}
           onChange={(e) => onDeviceIpChange(e.target.value)}
           placeholder="IP adresa"
         />
         <input
+          id="device-mac"
+          name="deviceMac"
           value={deviceMac}
           onChange={(e) => onDeviceMacChange(e.target.value)}
           placeholder="MAC adresa"
         />
         <select
+          id="device-brand"
+          name="deviceBrand"
           value={deviceBrand}
           onChange={(e) => onDeviceBrandChange(e.target.value)}
         >
@@ -70,6 +78,8 @@ export default function DeviceEditorModal({
           <option value="samsung">Samsung</option>
         </select>
         <select
+          id="device-group"
+          name="modalGroupId"
           value={modalGroupId ?? ""}
           onChange={(e) =>
             onModalGroupIdChange(
