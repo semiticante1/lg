@@ -1893,21 +1893,45 @@ function App() {
           <>
             <h1>Početna</h1>
             <div className="stats">
-              <div className="stat-card">
+              <div className="stat-card stat-total">
+                <div className="stat-card-top">
+                  <span className="stat-icon">📦</span>
+                  <span className="stat-title">Ukupno uređaja</span>
+                </div>
                 <div className="stat-number">{devices.length}</div>
-                <div>Ukupno uređaja</div>
+                <div className="stat-meta">Sve jedinice</div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card stat-online">
+                <div className="stat-card-top">
+                  <span className="stat-icon">✅</span>
+                  <span className="stat-title">Na mreži</span>
+                </div>
                 <div className="stat-number">{onlineCount}</div>
-                <div>Na mreži</div>
+                <div className="stat-meta">Aktivni uređaji</div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card stat-offline">
+                <div className="stat-card-top">
+                  <span className="stat-icon">⛔</span>
+                  <span className="stat-title">Van mreže</span>
+                </div>
                 <div className="stat-number">{offlineCount}</div>
-                <div>Van mreže</div>
+                <div className="stat-meta">Nedostupni uređaji</div>
               </div>
-              <div className="stat-card">
-                <div className="stat-number">{groups.length}</div>
-                <div>Grupe</div>
+              <div className="stat-card stat-powered">
+                <div className="stat-card-top">
+                  <span className="stat-icon">⚡</span>
+                  <span className="stat-title">Uključeno</span>
+                </div>
+                <div className="stat-number">{poweredOnCount}</div>
+                <div className="stat-meta">Napajanje aktivno</div>
+              </div>
+              <div className="stat-card stat-selected">
+                <div className="stat-card-top">
+                  <span className="stat-icon">🎯</span>
+                  <span className="stat-title">Odabrano</span>
+                </div>
+                <div className="stat-number">{selectedCount}</div>
+                <div className="stat-meta">Trenutno označeno</div>
               </div>
             </div>
 
@@ -2507,25 +2531,45 @@ function App() {
             )}
 
             <div className="stats">
-              <div className="stat-card">
+              <div className="stat-card stat-total">
+                <div className="stat-card-top">
+                  <span className="stat-icon">📦</span>
+                  <span className="stat-title">Ukupno uređaja</span>
+                </div>
                 <div className="stat-number">{devices.length}</div>
-                <div>Ukupno uređaja</div>
+                <div className="stat-meta">Sve jedinice</div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card stat-online">
+                <div className="stat-card-top">
+                  <span className="stat-icon">✅</span>
+                  <span className="stat-title">Na mreži</span>
+                </div>
                 <div className="stat-number">{onlineCount}</div>
-                <div>Na mreži</div>
+                <div className="stat-meta">Aktivni uređaji</div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card stat-offline">
+                <div className="stat-card-top">
+                  <span className="stat-icon">⛔</span>
+                  <span className="stat-title">Van mreže</span>
+                </div>
                 <div className="stat-number">{offlineCount}</div>
-                <div>Van mreže</div>
+                <div className="stat-meta">Nedostupni uređaji</div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card stat-powered">
+                <div className="stat-card-top">
+                  <span className="stat-icon">⚡</span>
+                  <span className="stat-title">Uključeno</span>
+                </div>
                 <div className="stat-number">{poweredOnCount}</div>
-                <div>Uključeno</div>
+                <div className="stat-meta">Napajanje aktivno</div>
               </div>
-              <div className="stat-card">
+              <div className="stat-card stat-selected">
+                <div className="stat-card-top">
+                  <span className="stat-icon">🎯</span>
+                  <span className="stat-title">Odabrano</span>
+                </div>
                 <div className="stat-number">{selectedCount}</div>
-                <div>Odabrano</div>
+                <div className="stat-meta">Trenutno označeno</div>
               </div>
             </div>
 
@@ -2717,48 +2761,33 @@ function App() {
                           </span>
                         </td>
                         <td>
-                          <div className="action-buttons-row">
+                          <div className="action-dropdown-wrapper">
                             <button
                               type="button"
-                              className="poweron-btn"
-                              onClick={() => handlePowerOnDevice(device.id)}
+                              className="action-menu-btn"
+                              aria-haspopup="menu"
+                              aria-expanded={openDropdownId === device.id}
+                              onClick={() => toggleDropdown(device.id)}
                             >
-                              <span className="button-icon">🔌</span> Uključi
+                              ⋮
                             </button>
-                            <button
-                              type="button"
-                              className="poweroff-btn"
-                              onClick={() => handlePowerOffDevice(device.id)}
-                            >
-                              <span className="button-icon">⏻</span> Isključi
-                            </button>
-
-                            <div className="action-dropdown-wrapper">
-                              <button
-                                type="button"
-                                className="action-menu-btn"
-                                onClick={() => toggleDropdown(device.id)}
-                              >
-                                Akcije ▾
-                              </button>
-                              {openDropdownId === device.id && (
-                                <div className="action-dropdown">
-                                  <button type="button" className="dropdown-item" onClick={() => handleViewDevice(device.id)}><span className="dropdown-item-icon">👁️</span> Pogledaj</button>
-                                  <button type="button" className="dropdown-item" onClick={() => {
-                                    setEditingId(device.id);
-                                    setDeviceName(device.name);
-                                    setDeviceIp(device.ip);
-                                    setDeviceMac(device.mac);
-                                    setModalGroupId(device.groupId ?? null);
-                                    setShowModal(true);
-                                    setOpenDropdownId(null);
-                                  }}><span className="dropdown-item-icon">✏️</span> Uredi</button>
-                                  <button type="button" className="dropdown-item" onClick={() => { handleOpenAuditForDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">📜</span> Audit log</button>
-                                  <button type="button" className="dropdown-item" onClick={() => { handleRestartDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🔄</span> Restart</button>
-                                  <button type="button" className="dropdown-item" onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🗑️</span> Obriši</button>
-                                </div>
-                              )}
-                            </div>
+                            {openDropdownId === device.id && (
+                              <div className="action-dropdown" role="menu">
+                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { handleViewDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">👁️</span> Pogledaj</button>
+                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => {
+                                  setEditingId(device.id);
+                                  setDeviceName(device.name);
+                                  setDeviceIp(device.ip);
+                                  setDeviceMac(device.mac);
+                                  setModalGroupId(device.groupId ?? null);
+                                  setShowModal(true);
+                                  setOpenDropdownId(null);
+                                }}><span className="dropdown-item-icon">✏️</span> Uredi</button>
+                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { handleOpenAuditForDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">📜</span> Audit log</button>
+                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { handleRestartDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🔄</span> Restart</button>
+                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🗑️</span> Obriši</button>
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
