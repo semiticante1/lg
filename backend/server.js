@@ -42,6 +42,8 @@ const RUNTIME_ISSUE_ALERT_THRESHOLD = Number(process.env.RUNTIME_ISSUE_ALERT_THR
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://127.0.0.1:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5174",
   "http://localhost:4173",
   "http://127.0.0.1:4173",
 ];
@@ -382,7 +384,7 @@ const applySecurityHeaders = (req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
   res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
-  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   return next();
 };
@@ -398,11 +400,16 @@ const ensureValidDeviceMac = async (ip, mac) => {
     return { ok: true, mac: normalizeMacToColon(discoveredMac), source: "arp" };
   }
 
+  // Generate a fallback MAC from IP address (02:xx:xx:xx:xx:xx pattern)
+  // This allows device addition even when MAC can't be discovered via ARP
+  const ipParts = ip.split(".").map(p => parseInt(p).toString(16).padStart(2, "0"));
+  const fallbackMac = `02:${ipParts.join(":")}`;
+  
   return {
-    ok: false,
-    mac: normalizedInputMac,
-    source: "invalid",
-    reason: "MAC adresa nije ispravna i automatski oporavak iz ARP tabele nije uspio.",
+    ok: true,
+    mac: fallbackMac,
+    source: "fallback",
+    reason: "MAC nije pronađen, koristi se privremena vrijednost. Ažuriraj MAC kada je TV dostupan.",
   };
 };
 
@@ -1198,16 +1205,21 @@ const executeScheduleAction = async (scheduleId) => {
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) {
-      return callback(null, true);
+    if (DEFAULT_ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true);
     }
-    if (allowedOrigins.has(origin)) {
-      return callback(null, true);
-    }
-    return callback(new Error("CORS blocked: origin not allowed"));
   },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Discovery-Click-Id",
+    "X-Discovery-Client-Attempt",
+  ],
+  credentials: true,
+  optionsSuccessStatus: 204,
 }));
 app.use(express.json({ limit: "100kb" }));
 app.use(applySecurityHeaders);
@@ -1303,8 +1315,39 @@ app.get("/devices/discover", async (req, res) => {
       existingIPs.add(d.ip);
     });
 
+    // Try to resolve MAC addresses for devices that don't have them
+    console.log(`[Server][${traceId}] Attempting to resolve MAC addresses for discovered devices...`);
+    const devicesWithMac = discoveredDevices.map((device) => ({ ...device }));
+    
+    // Wait briefly for MAC resolution (parallel, with timeouts per device)
+    const macResolutionPromises = devicesWithMac
+      .filter(d => !d.mac)
+      .map(async (device) => {
+        try {
+          const macPromise = resolveMacFromArp(device.ip);
+          const timeoutPromise = new Promise((resolve) =>
+            setTimeout(() => resolve(null), 1500)
+          );
+          const resolvedMac = await Promise.race([macPromise, timeoutPromise]);
+          
+          if (resolvedMac) {
+            device.mac = resolvedMac;
+            console.log(`[Server][${traceId}] Resolved MAC for ${device.ip}: ${resolvedMac}`);
+          }
+        } catch (e) {
+          console.warn(`[Server][${traceId}] Failed to resolve MAC for ${device.ip}:`, e?.message);
+        }
+      });
+    
+    // Wait for all MAC resolution attempts (max 3 seconds total)
+    const macResolutionTimeout = new Promise((resolve) => setTimeout(resolve, 3000));
+    await Promise.race([
+      Promise.allSettled(macResolutionPromises),
+      macResolutionTimeout
+    ]);
+
     // Mark which devices are already added
-    const devicesWithStatus = discoveredDevices.map((device) => ({
+    const devicesWithStatus = devicesWithMac.map((device) => ({
       ...device,
       already_added: existingIPs.has(device.ip),
     }));

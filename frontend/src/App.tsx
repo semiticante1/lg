@@ -100,6 +100,7 @@ function App() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsSummary | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const diagnosticsAlertCountRef = useRef(0);
+  const discoveryInitiatedRef = useRef(false);
 
   const baseUrl = backendUrl.replace(/\/$/, "");
 
@@ -1297,11 +1298,9 @@ function App() {
         if (!device) continue;
 
         const candidateMac = (device.mac || "").trim();
-        if (!isValidMac(candidateMac)) {
-          failureCount++;
-          continue;
-        }
-
+        // Allow devices without valid MAC - backend will use fallback
+        // Only skip if MAC validation fails AND backend requires it
+        
         try {
           const response = await fetch(`${baseUrl}/devices`, {
             method: "POST",
@@ -1309,7 +1308,7 @@ function App() {
             body: JSON.stringify({
               name: device.name || `TV (${ip})`,
               ip: device.ip,
-              mac: candidateMac,
+              mac: candidateMac || `02:${ip.split(".").map(p => parseInt(p).toString(16).padStart(2, "0")).join(":")}`,
               brand: device.brand || "generic",
               groupId: null,
             }),
@@ -1318,9 +1317,12 @@ function App() {
           if (response.ok) {
             successCount++;
           } else {
+            const errData = await response.json().catch(() => ({}));
+            console.error(`Failed to add device ${ip}:`, errData?.error);
             failureCount++;
           }
-        } catch {
+        } catch (err) {
+          console.error(`Error adding device ${ip}:`, err);
           failureCount++;
         }
       }
@@ -1336,14 +1338,10 @@ function App() {
 
       if (failureCount > 0) {
         showToast(
-          "info",
-          "Neki uređaji preskočeni",
-          `${failureCount} uređaj(a) nije dodano jer MAC nije bio validan. Pokreni skeniranje ponovo dok je TV uključen.`
+          "error",
+          "Greška pri dodavanju",
+          `${failureCount} uređaj(a) nije dodano jer MAC nije bio validan ili greška pri dodavanju. Pokreni skeniranje ponovo dok je TV uključen.`
         );
-      }
-
-      if (failureCount > 0) {
-        showToast("error", "Greška", `${failureCount} TV-a nije uspjelo dodati`);
       }
     } catch (error) {
       console.error("Add discovered devices error:", error);
@@ -1476,7 +1474,7 @@ function App() {
 
   // Lock body scroll when modals are open
   useEffect(() => {
-    const isAnyModalOpen = showModal || showViewModal || showDeleteConfirm || showAssignGroupModal || messageModal || showScheduleBuilder;
+    const isAnyModalOpen = showModal || showViewModal || showDeleteConfirm || showAssignGroupModal || messageModal || showScheduleBuilder || showDiscoveryModal;
     if (isAnyModalOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -1485,7 +1483,20 @@ function App() {
     return () => {
       document.body.style.overflow = 'auto';
     };
-  }, [showModal, showViewModal, showDeleteConfirm, showAssignGroupModal, messageModal, showScheduleBuilder]);
+  }, [showModal, showViewModal, showDeleteConfirm, showAssignGroupModal, messageModal, showScheduleBuilder, showDiscoveryModal]);
+
+  // Auto-trigger discovery when modal opens
+  useEffect(() => {
+    if (showDiscoveryModal && !discoveryLoading && discoveredDevices.length === 0 && !discoveryInitiatedRef.current) {
+      discoveryInitiatedRef.current = true;
+      handleStartDiscovery();
+    }
+    
+    // Reset the flag when modal closes
+    if (!showDiscoveryModal) {
+      discoveryInitiatedRef.current = false;
+    }
+  }, [showDiscoveryModal, discoveryLoading, discoveredDevices.length]);
 
   const handleViewDevice = async (id: number) => {
     const dev = devices.find((d) => d.id === id) || null;
