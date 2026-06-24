@@ -1284,7 +1284,7 @@ button:disabled {
 .action-dropdown {
   position: absolute;
   top: 44px;
-  right: 0;
+  right: 60px;
   background: var(--surface);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 14px;
