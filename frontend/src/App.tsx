@@ -1118,6 +1118,15 @@ function App() {
     }
   };
 
+  const applyOptimisticPowerOffState = (ids: number[]) => {
+    if (ids.length === 0) return;
+    setDevices((prev) =>
+      prev.map((device) =>
+        ids.includes(device.id) ? { ...device, powerState: "Off", power_state: "Off" } : device
+      )
+    );
+  };
+
   const handlePowerOnAll = async () => {
     try {
       const response = await fetch(`${baseUrl}/devices/poweron-all`, {
@@ -1149,9 +1158,7 @@ function App() {
     // Optimistic UI update: mark device as Off immediately
     const device = devices.find((d) => d.id === id);
     if (device) {
-      setDevices((prev) =>
-        prev.map((d) => (d.id === id ? { ...d, powerState: "Off", power_state: "Off" } : d))
-      );
+      applyOptimisticPowerOffState([id]);
       recordDeviceEvent({ ...device, powerState: "Off" }, "Manual power off requested");
       setStatusMessage("Zahtjev za gašenje poslan (status ažuriran lokalno).");
       setTimeout(() => setStatusMessage(""), 3000);
@@ -1179,8 +1186,8 @@ function App() {
         return;
       }
 
-      // backend accepted the request; final sync
-      await refreshAll();
+      // backend accepted the request; keep the optimistic UI state
+      return;
     } catch (error) {
       console.error("Greska pri gašenju uređaja:", error);
       showMessage("Greška", "Greška pri gašenju uređaja.");
@@ -1449,6 +1456,10 @@ function App() {
   };
 
   const handlePowerOffAll = async () => {
+    if (devices.length > 0) {
+      applyOptimisticPowerOffState(devices.map((device) => device.id));
+    }
+
     try {
       const response = await fetch(`${baseUrl}/devices/poweroff-all`, {
         method: "POST",
@@ -1461,6 +1472,7 @@ function App() {
           "Greška",
           `Nije uspjelo gašenje svih TV-a: ${errorData?.error || response.statusText}`
         );
+        await refreshAll();
         return;
       }
 
@@ -1468,10 +1480,10 @@ function App() {
       const successCount = data.results.filter((item: any) => item.poweredOff).length;
       setStatusMessage(`Poslano gašenje svih uređaja. Ugašeno ${successCount} od ${data.results.length}.`);
       setTimeout(() => setStatusMessage(""), 4000);
-      await refreshAll();
     } catch (error) {
       console.error("Greska pri gašenju svih TV-a:", error);
       showMessage("Greška", "Greška pri gašenju svih TV-a.");
+      await refreshAll();
     }
   };
 
@@ -1786,6 +1798,11 @@ function App() {
   };
 
   const handlePowerOffGroup = async (groupId: number) => {
+    const groupDeviceIds = devices.filter((device) => device.groupId === groupId).map((device) => device.id);
+    if (groupDeviceIds.length > 0) {
+      applyOptimisticPowerOffState(groupDeviceIds);
+    }
+
     try {
       const response = await fetch(`${baseUrl}/groups/${groupId}/poweroff`, {
         method: "POST",
@@ -1798,16 +1815,17 @@ function App() {
           "Greška",
           `Nije uspjelo gašenje grupe: ${errorData?.error || response.statusText}`
         );
+        await refreshAll();
         return;
       }
 
       const data = await response.json();
       const successCount = data.results.filter((item: any) => item.poweredOff).length;
       showMessage("Info", `Poslano gašenje grupe. Ugašeno ${successCount} uređaja.`);
-      await refreshAll();
     } catch (error) {
       console.error("Greška pri gašenju grupe:", error);
       showMessage("Greška", "Greška pri gašenju grupe.");
+      await refreshAll();
     }
   };
 
