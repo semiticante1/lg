@@ -1,4 +1,12 @@
 import React, { useState, useEffect } from "react";
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import Button from '@mui/material/Button';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Box from '@mui/material/Box';
 import "./ScheduleBuilderModal.css";
 
 interface ScheduleBuilderProps {
@@ -67,16 +75,6 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
     return `${m} ${h} * * ${dayString}`;
   };
 
-  const handleDayToggle = (dayNum: number) => {
-    setSelectedDays((prev) => {
-      const newDays = prev.includes(dayNum)
-        ? prev.filter((d) => d !== dayNum)
-        : [...prev, dayNum];
-      onCronChange(generateCron(hour, minute, newDays));
-      return newDays;
-    });
-  };
-
   const handleHourChange = (newHour: number) => {
     setHour(newHour);
     onCronChange(generateCron(newHour, minute, selectedDays));
@@ -116,47 +114,54 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
 
   if (!isOpen) return null;
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    // Only close if clicking directly on the overlay, not on the modal content
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
+  const handleDayGroupChange = (
+    _event: React.MouseEvent<HTMLElement>,
+    newSelectedDays: number[],
+  ) => {
+    const days = Array.isArray(newSelectedDays) ? newSelectedDays : [];
+    setSelectedDays(days);
+    onCronChange(generateCron(hour, minute, days));
   };
 
   return (
-    <div className="schedule-builder-overlay" onClick={handleOverlayClick}>
-      <div className="schedule-builder-modal">
-        <div className="schedule-builder-header">
-          <h2>Postavi raspored</h2>
-          <p className="schedule-builder-subtitle">{deviceName} - {action}</p>
-          <button className="close-btn" onClick={onClose}>✕</button>
-        </div>
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      aria-labelledby="schedule-builder-dialog-title"
+      slotProps={{ paper: { className: 'schedule-builder-modal' } }}
+      fullWidth
+      maxWidth="md"
+    >
+      <DialogTitle id="schedule-builder-dialog-title">Postavi raspored</DialogTitle>
+      <DialogContent dividers>
+        <Box sx={{ mb: 2 }}>
+          <div className="schedule-builder-header">
+            <p className="schedule-builder-subtitle">{deviceName} - {action}</p>
+          </div>
 
-        <div className="schedule-builder-content">
-          {/* Time Section */}
           <div className="schedule-section">
             <h3>Vrijeme</h3>
-            
-            {/* Hour Picker */}
             <div className="time-picker-section">
               <div className="time-input-group">
                 <label>Sat</label>
                 <div className="hour-picker">
-                  <button
-                    className="hour-btn"
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => handleHourChange((hour - 1 + 24) % 24)}
                   >
                     ◀
-                  </button>
+                  </Button>
                   <div className="hour-display">
                     {String(hour).padStart(2, "0")}
                   </div>
-                  <button
-                    className="hour-btn"
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => handleHourChange((hour + 1) % 24)}
                   >
                     ▶
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -165,21 +170,23 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
               <div className="time-input-group">
                 <label>Minuta</label>
                 <div className="minute-picker">
-                  <button
-                    className="minute-btn"
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => handleMinuteChange((minute - 5 + 60) % 60)}
                   >
                     ◀
-                  </button>
+                  </Button>
                   <div className="minute-display">
                     {String(minute).padStart(2, "0")}
                   </div>
-                  <button
-                    className="minute-btn"
+                  <Button
+                    variant="outlined"
+                    size="small"
                     onClick={() => handleMinuteChange((minute + 5) % 60)}
                   >
                     ▶
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -188,53 +195,53 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
               {String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}
             </div>
 
-            {/* Preset Times */}
             <div className="preset-buttons">
               {presetSchedules.map((preset) => (
-                <button
+                <Button
                   key={preset.label}
                   className="preset-btn"
+                  variant="outlined"
+                  size="small"
                   onClick={() => {
                     handleHourChange(preset.hour);
                     handleMinuteChange(preset.minute);
                   }}
                 >
                   {preset.label}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
 
-          {/* Days Section */}
           <div className="schedule-section">
             <h3>Dani</h3>
-            
-            <div className="day-picker">
+            <ToggleButtonGroup
+              value={selectedDays}
+              onChange={handleDayGroupChange}
+              aria-label="Odaberi dane"
+              size="small"
+            >
               {dayLabelsShort.map((label, dayNum) => (
-                <button
-                  key={dayNum}
-                  className={`day-btn ${selectedDays.includes(dayNum) ? "active" : ""}`}
-                  onClick={() => handleDayToggle(dayNum)}
-                  title={dayNames[dayNum]}
-                >
+                <ToggleButton key={dayNum} value={dayNum} aria-label={dayNames[dayNum]}>
                   {label}
-                </button>
+                </ToggleButton>
               ))}
-            </div>
+            </ToggleButtonGroup>
 
-            {/* Preset Days */}
             <div className="preset-buttons">
               {presetDays.map((preset) => (
-                <button
+                <Button
                   key={preset.label}
                   className="preset-btn"
+                  variant="outlined"
+                  size="small"
                   onClick={() => {
                     setSelectedDays(preset.days);
                     onCronChange(generateCron(hour, minute, preset.days));
                   }}
                 >
                   {preset.label}
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -245,7 +252,6 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
             )}
           </div>
 
-          {/* Summary */}
           <div className="schedule-summary">
             <div className="summary-item">
               <span className="summary-label">Vrijeme:</span>
@@ -266,22 +272,20 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
               <span className="summary-cron">{generateCron(hour, minute, selectedDays)}</span>
             </div>
           </div>
-        </div>
-
-        <div className="schedule-builder-footer">
-          <button className="cancel-btn" onClick={onClose} disabled={loading}>
-            Otkaži
-          </button>
-          <button
-            className="save-btn"
-            onClick={handleSave}
-            disabled={loading || selectedDays.length === 0}
-          >
-            {loading ? "Sprema..." : "Spremi raspored"}
-          </button>
-        </div>
-      </div>
-    </div>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose} disabled={loading}>Otkaži</Button>
+        <Button
+          onClick={handleSave}
+          disabled={loading || selectedDays.length === 0}
+          variant="contained"
+          color="primary"
+        >
+          {loading ? "Sprema..." : "Spremi raspored"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };
 

@@ -9,11 +9,32 @@ import DarkModeIcon from '@mui/icons-material/DarkMode';
 import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
 import TextField from '@mui/material/TextField';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import FormControl from '@mui/material/FormControl';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Checkbox from '@mui/material/Checkbox';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableContainer from '@mui/material/TableContainer';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import Paper from '@mui/material/Paper';
+import Grid from '@mui/material/Grid';
+import Card from '@mui/material/Card';
+import CardContent from '@mui/material/CardContent';
+import CardActions from '@mui/material/CardActions';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import Alert from '@mui/material/Alert';
+import LinearProgress from '@mui/material/LinearProgress';
+import CircularProgress from '@mui/material/CircularProgress';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PowerIcon from '@mui/icons-material/Power';
 import PowerOffIcon from '@mui/icons-material/PowerOff';
@@ -2065,51 +2086,71 @@ function App() {
         {activePage === "dashboard" && (
           <>
             <h1>Početna</h1>
-            <div className="stats">
-              <div className="stat-card stat-total">
-                <div className="stat-card-top">
-                  <span className="stat-icon">📦</span>
-                  <span className="stat-title">Ukupno uređaja</span>
-                </div>
-                <div className="stat-number">{devices.length}</div>
-                <div className="stat-meta">Sve jedinice</div>
-              </div>
-              <div className="stat-card stat-online">
-                <div className="stat-card-top">
-                  <span className="stat-icon">✅</span>
-                  <span className="stat-title">Na mreži</span>
-                </div>
-                <div className="stat-number">{onlineCount}</div>
-                <div className="stat-meta">Aktivni uređaji</div>
-              </div>
-              <div className="stat-card stat-offline">
-                <div className="stat-card-top">
-                  <span className="stat-icon">⛔</span>
-                  <span className="stat-title">Van mreže</span>
-                </div>
-                <div className="stat-number">{offlineCount}</div>
-                <div className="stat-meta">Nedostupni uređaji</div>
-              </div>
-              <div className="stat-card stat-powered">
-                <div className="stat-card-top">
-                  <span className="stat-icon">⚡</span>
-                  <span className="stat-title">Uključeno</span>
-                </div>
-                <div className="stat-number">{poweredOnCount}</div>
-                <div className="stat-meta">Napajanje aktivno</div>
-              </div>
-              <div className="stat-card stat-selected">
-                <div className="stat-card-top">
-                  <span className="stat-icon">🎯</span>
-                  <span className="stat-title">Odabrano</span>
-                </div>
-                <div className="stat-number">{selectedCount}</div>
-                <div className="stat-meta">Trenutno označeno</div>
-              </div>
-            </div>
+            <Grid component="div" container spacing={2} className="stats">
+              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
+                <Card className="stat-card stat-total">
+                  <CardContent>
+                    <div className="stat-card-top">
+                      <span className="stat-icon">📦</span>
+                      <span className="stat-title">Ukupno uređaja</span>
+                    </div>
+                    <div className="stat-number">{devices.length}</div>
+                    <div className="stat-meta">Sve jedinice</div>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
+                <Card className="stat-card stat-online">
+                  <CardContent>
+                    <div className="stat-card-top">
+                      <span className="stat-icon">✅</span>
+                      <span className="stat-title">Na mreži</span>
+                    </div>
+                    <div className="stat-number">{onlineCount}</div>
+                    <div className="stat-meta">Aktivni uređaji</div>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
+                <Card className="stat-card stat-offline">
+                  <CardContent>
+                    <div className="stat-card-top">
+                      <span className="stat-icon">⛔</span>
+                      <span className="stat-title">Van mreže</span>
+                    </div>
+                    <div className="stat-number">{offlineCount}</div>
+                    <div className="stat-meta">Nedostupni uređaji</div>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
+                <Card className="stat-card stat-powered">
+                  <CardContent>
+                    <div className="stat-card-top">
+                      <span className="stat-icon">⚡</span>
+                      <span className="stat-title">Uključeno</span>
+                    </div>
+                    <div className="stat-number">{poweredOnCount}</div>
+                    <div className="stat-meta">Napajanje aktivno</div>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
+                <Card className="stat-card stat-selected">
+                  <CardContent>
+                    <div className="stat-card-top">
+                      <span className="stat-icon">🎯</span>
+                      <span className="stat-title">Odabrano</span>
+                    </div>
+                    <div className="stat-number">{selectedCount}</div>
+                    <div className="stat-meta">Trenutno označeno</div>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
 
             {hasCritical && (
-              <div className={`alarm-notification alarm-${healthStatus}`}>
+              <Alert severity="error" className={`alarm-notification alarm-${healthStatus}`}>
                 <div className="alarm-header">
                   <span className="alarm-icon">⚠️</span>
                   <span className="alarm-title">UPOZORENJE - Kritični uređaji offline</span>
@@ -2123,7 +2164,7 @@ function App() {
                     </div>
                   ))}
                 </div>
-              </div>
+              </Alert>
             )}
 
             <div className="health-score-card">
@@ -2134,7 +2175,12 @@ function App() {
                 </div>
               </div>
               <div className="health-bar">
-                <div className="health-bar-fill" style={{ width: `${healthScore}%` }}></div>
+                <LinearProgress
+                  variant="determinate"
+                  value={healthScore}
+                  className="health-bar-fill"
+                  sx={{ height: 12, borderRadius: 6 }}
+                />
               </div>
               <p className="health-text">
                 {healthStatus === "excellent" && "Mreža je u odličnom stanju! Svi uređaji su dostupni."}
@@ -2148,11 +2194,11 @@ function App() {
               <div className="chart-card">
                 <div className="chart-title">Uređaji na mreži</div>
                 <div className="chart-bar-container">
-                  <div
+                  <LinearProgress
+                    variant="determinate"
+                    value={devices.length ? (onlineCount / devices.length) * 100 : 0}
                     className="chart-bar online"
-                    style={{
-                      width: `${devices.length ? (onlineCount / devices.length) * 100 : 0}%`,
-                    }}
+                    sx={{ height: 10, borderRadius: 5 }}
                   />
                 </div>
                 <div className="chart-metrics">
@@ -2163,11 +2209,11 @@ function App() {
               <div className="chart-card">
                 <div className="chart-title">Uređaji van mreže</div>
                 <div className="chart-bar-container">
-                  <div
+                  <LinearProgress
+                    variant="determinate"
+                    value={devices.length ? (offlineCount / devices.length) * 100 : 0}
                     className="chart-bar offline"
-                    style={{
-                      width: `${devices.length ? (offlineCount / devices.length) * 100 : 0}%`,
-                    }}
+                    sx={{ height: 10, borderRadius: 5 }}
                   />
                 </div>
                 <div className="chart-metrics">
@@ -2212,28 +2258,22 @@ function App() {
                 <div className="circular-grid">
                   {groupStatusSummary.slice(0, 4).map((group) => {
                     const healthPercent = group.deviceCount ? (group.onlineCount / group.deviceCount) * 100 : 0;
-                    const circumference = 2 * Math.PI * 45;
-                    const strokeDashoffset = circumference - (healthPercent / 100) * circumference;
                     return (
                       <div key={group.id} className="circular-progress-card">
-                        <svg className="circular-progress" viewBox="0 0 100 100">
-                          <circle cx="50" cy="50" r="45" fill="none" stroke="#e2e8f0" strokeWidth="8" />
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="45"
-                            fill="none"
-                            stroke={healthPercent > 50 ? '#22c55e' : healthPercent > 20 ? '#f59e0b' : '#ef4444'}
-                            strokeWidth="8"
-                            strokeDasharray={circumference}
-                            strokeDashoffset={strokeDashoffset}
-                            strokeLinecap="round"
-                            transform="rotate(-90 50 50)"
+                        <div className="circular-progress-wrapper">
+                          <CircularProgress
+                            variant="determinate"
+                            value={healthPercent}
+                            size={100}
+                            thickness={8}
+                            sx={{
+                              color: healthPercent > 50 ? '#22c55e' : healthPercent > 20 ? '#f59e0b' : '#ef4444',
+                            }}
                           />
-                          <text x="50" y="50" textAnchor="middle" dy="0.3em" fontSize="20" fontWeight="700" fill="#1f2937">
+                          <div className="circular-progress-center">
                             {Math.round(healthPercent)}%
-                          </text>
-                        </svg>
+                          </div>
+                        </div>
                         <div className="circular-progress-label">
                           <strong>{group.name}</strong>
                           <small>{group.onlineCount}/{group.deviceCount}</small>
@@ -2254,22 +2294,28 @@ function App() {
                 {groupHealth.length === 0 ? (
                   <p className="empty-log">Nema dovoljno podataka za grupnu analizu.</p>
                 ) : (
-                  <ul className="group-health-list">
+                  <List className="group-health-list">
                     {groupHealth.map((group) => (
-                      <li key={group.id} className="group-health-item">
-                        <div className="group-health-title">
-                          <strong>{group.name}</strong>
-                          <span>{group.offlineCount}/{group.deviceCount} offline</span>
-                        </div>
-                        <div className="group-health-bar-container">
-                          <div
-                            className="group-health-bar"
-                            style={{ width: `${group.deviceCount ? (group.offlineRatio * 100).toFixed(0) : 0}%` }}
-                          />
-                        </div>
-                      </li>
+                      <ListItem key={group.id} className="group-health-item">
+                        <ListItemText
+                          primary={
+                            <div className="group-health-title">
+                              <strong>{group.name}</strong>
+                              <span>{group.offlineCount}/{group.deviceCount} offline</span>
+                            </div>
+                          }
+                          secondary={
+                            <div className="group-health-bar-container">
+                              <div
+                                className="group-health-bar"
+                                style={{ width: `${group.deviceCount ? (group.offlineRatio * 100).toFixed(0) : 0}%` }}
+                              />
+                            </div>
+                          }
+                        />
+                      </ListItem>
                     ))}
-                  </ul>
+                  </List>
                 )}
               </div>
               <div className="dashboard-panel">
@@ -2277,11 +2323,13 @@ function App() {
                 <p className="form-description">
                   Kratki pregled najvažnijih stanja i preporuka za akciju.
                 </p>
-                <ul className="insight-list">
+                <List className="insight-list">
                   {dashboardInsights.map((insight, index) => (
-                    <li key={index}>{insight}</li>
+                    <ListItem key={index} className="insight-list-item">
+                      <ListItemText primary={insight} />
+                    </ListItem>
                   ))}
-                </ul>
+                </List>
               </div>
             </div>
           </>
@@ -2304,51 +2352,49 @@ function App() {
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
               />
-              <button type="button" className="add-btn" onClick={handleCreateGroup}>
+              <Button className="add-btn" onClick={handleCreateGroup}>
                 Kreiraj grupu
-              </button>
+              </Button>
             </div>
 
             <div className="group-list">
               {groupStatusSummary.map((group) => (
-                <div className="group-card" key={group.id}>
-                  <div className="group-card-title">{group.name}</div>
-                  <div>{group.deviceCount} uređaja</div>
-                  <div className="group-metrics">
-                    <span>Online: {group.onlineCount}</span>
-                    <span>Offline: {group.offlineCount}</span>
-                  </div>
-                  <div className="group-card-actions">
-                    <button
-                      type="button"
+                <Card className="group-card" key={group.id}>
+                  <CardContent>
+                    <div className="group-card-title">{group.name}</div>
+                    <div>{group.deviceCount} uređaja</div>
+                    <div className="group-metrics">
+                      <span>Online: {group.onlineCount}</span>
+                      <span>Offline: {group.offlineCount}</span>
+                    </div>
+                  </CardContent>
+                  <CardActions className="group-card-actions">
+                    <Button
                       className="action-btn restart-btn"
                       onClick={() => handleRestartGroup(group.id)}
                     >
                       Restart grupe
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       className="action-btn poweron-btn"
                       onClick={() => handlePowerOnGroup(group.id)}
                     >
                       Upali grupu
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       className="action-btn poweroff-btn"
                       onClick={() => handlePowerOffGroup(group.id)}
                     >
                       Isključi grupu
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
                       className="action-btn"
                       onClick={() => handleOpenAuditForGroup(group.id)}
                     >
                       Audit log
-                    </button>
-                  </div>
-                </div>
+                    </Button>
+                  </CardActions>
+                </Card>
               ))}
             </div>
           </>
@@ -2411,48 +2457,50 @@ function App() {
             </div>
 
             <div className="table-wrapper">
-              <table className="device-table">
-                <thead>
-                  <tr>
-                    <th>Vrijeme</th>
-                    <th>Ko/Izvor</th>
-                    <th>Akcija</th>
-                    <th>Uređaj</th>
-                    <th>Grupa</th>
-                    <th>Ishod</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditLogs.length === 0 ? (
-                    <tr className="empty-row">
-                      <td colSpan={6}>Nema audit zapisa za odabrani filter.</td>
-                    </tr>
-                  ) : (
-                    auditLogs.map((entry) => {
-                      const deviceName = entry.device_id
-                        ? devices.find((d) => d.id === entry.device_id)?.name || `Uređaj ${entry.device_id}`
-                        : "-";
-                      const groupName = entry.group_id
-                        ? groups.find((g) => g.id === entry.group_id)?.name || `Grupa ${entry.group_id}`
-                        : "-";
-                      return (
-                        <tr key={entry.id}>
-                          <td>{new Date(entry.created_at).toLocaleString()}</td>
-                          <td>{entry.source || "system"}</td>
-                          <td>{entry.action}</td>
-                          <td>{deviceName}</td>
-                          <td>{groupName}</td>
-                          <td>
-                            <span className={entry.status.includes("success") ? "status-online" : "status-offline"}>
-                              {entry.status}
-                            </span>
-                          </td>
-                        </tr>
-                      );
+              <TableContainer component={Paper} className="device-table">
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Vrijeme</TableCell>
+                      <TableCell>Ko/Izvor</TableCell>
+                      <TableCell>Akcija</TableCell>
+                      <TableCell>Uređaj</TableCell>
+                      <TableCell>Grupa</TableCell>
+                      <TableCell>Ishod</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {auditLogs.length === 0 ? (
+                      <TableRow className="empty-row">
+                        <TableCell colSpan={6}>Nema audit zapisa za odabrani filter.</TableCell>
+                      </TableRow>
+                    ) : (
+                      auditLogs.map((entry) => {
+                        const deviceName = entry.device_id
+                          ? devices.find((d) => d.id === entry.device_id)?.name || `Uređaj ${entry.device_id}`
+                          : "-";
+                        const groupName = entry.group_id
+                          ? groups.find((g) => g.id === entry.group_id)?.name || `Grupa ${entry.group_id}`
+                          : "-";
+                        return (
+                          <TableRow key={entry.id}>
+                            <TableCell>{new Date(entry.created_at).toLocaleString()}</TableCell>
+                            <TableCell>{entry.source || "system"}</TableCell>
+                            <TableCell>{entry.action}</TableCell>
+                            <TableCell>{deviceName}</TableCell>
+                            <TableCell>{groupName}</TableCell>
+                            <TableCell>
+                              <span className={entry.status.includes("success") ? "status-online" : "status-offline"}>
+                                {entry.status}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        );
                     })
                   )}
-                </tbody>
-              </table>
+                  </TableBody>
+                </Table>
+              </TableContainer>
             </div>
           </>
         )}
@@ -2487,20 +2535,19 @@ function App() {
               </FormControl>
               <br />
               <br />
-              <button
-                type="button"
+              <Button
                 className="save-btn"
                 onClick={() => showMessage("Info", "Postavke spremljene lokalno.")}
               >
                 Spremi postavke
-              </button>
+              </Button>
 
               <br />
               <br />
               <h3>Health pregled</h3>
-              <button type="button" className="refresh-btn" onClick={loadHealthSummary} disabled={healthLoading}>
+              <Button type="button" className="refresh-btn" onClick={loadHealthSummary} disabled={healthLoading}>
                 {healthLoading ? "Učitavam health..." : "Osvježi health"}
-              </button>
+              </Button>
               {healthSummary ? (
                 <div>
                   <p>Vrijeme: {new Date(healthSummary.timestamp).toLocaleString()}</p>
@@ -2521,12 +2568,12 @@ function App() {
 
               <br />
               <h3>Backup i restore baze</h3>
-              <button type="button" className="save-btn" onClick={handleCreateBackup} disabled={backupLoading}>
+              <Button type="button" className="save-btn" onClick={handleCreateBackup} disabled={backupLoading}>
                 {backupLoading ? "Radim backup..." : "Napravi backup"}
-              </button>
-              <button type="button" className="refresh-btn" onClick={loadBackups} disabled={backupLoading} style={{ marginLeft: 8 }}>
+              </Button>
+              <Button type="button" className="refresh-btn" onClick={loadBackups} disabled={backupLoading} style={{ marginLeft: 8 }}>
                 Osvježi listu backupa
-              </button>
+              </Button>
               <br />
               <br />
               <FormControl size="small" className="small-select" sx={{ minWidth: 240 }}>
@@ -2553,14 +2600,13 @@ function App() {
               </FormControl>
               <br />
               <br />
-              <button
-                type="button"
+              <Button
                 className="action-btn poweroff-btn"
                 onClick={handleRestoreBackup}
                 disabled={backupLoading || !selectedBackup}
               >
                 {backupLoading ? "Restore u toku..." : "Restore odabranog backupa"}
-              </button>
+              </Button>
 
               <br />
               <br />
@@ -2569,48 +2615,44 @@ function App() {
                 Sedmični maintenance se izvršava automatski na backendu. Ovdje možeš ručno pokrenuti maintenance i otvoriti
                 dijagnostički snapshot kad se desi greška.
               </p>
-              <button
-                type="button"
+              <Button
                 className="action-btn poweron-btn"
                 onClick={handleRunMaintenanceNow}
                 disabled={diagnosticsLoading}
               >
                 {diagnosticsLoading ? "Maintenance radi..." : "Pokreni maintenance sada"}
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 className="refresh-btn"
                 onClick={loadDiagnostics}
                 disabled={diagnosticsLoading}
                 style={{ marginLeft: 8 }}
               >
                 Osvježi diagnostics
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 className="save-btn"
                 onClick={handleShowDiagnosticsSnapshot}
                 disabled={!diagnostics}
                 style={{ marginLeft: 8 }}
               >
                 Prikaži diagnostics snapshot
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
                 className="save-btn"
                 onClick={handleDownloadDiagnosticsSnapshot}
                 disabled={!diagnostics}
                 style={{ marginLeft: 8 }}
               >
                 Preuzmi diagnostics JSON
-              </button>
+              </Button>
 
               {diagnostics ? (
                 <div style={{ marginTop: 12 }}>
                   {diagnostics.runtimeIssues.length >= (diagnostics.config.runtimeIssueAlertThreshold ?? 8) && (
-                    <div className="diagnostics-alert-box">
+                    <Alert severity="warning" className="diagnostics-alert-box" sx={{ mb: 2 }}>
                       ⚠️ Upozorenje: runtime issue count je {diagnostics.runtimeIssues.length}, što prelazi prag {diagnostics.config.runtimeIssueAlertThreshold ?? 8}.
-                    </div>
+                    </Alert>
                   )}
                   <p><strong>Zadnji maintenance:</strong> {diagnostics.lastMaintenance?.timestamp ? new Date(diagnostics.lastMaintenance.timestamp).toLocaleString() : "nema"}</p>
                   <p><strong>Trigger:</strong> {diagnostics.lastMaintenance?.trigger || "-"}</p>
@@ -2641,27 +2683,27 @@ function App() {
 
 
             {showDeleteConfirm && (
-              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowDeleteConfirm(false); }}>
-                <div className="modal">
-                  <h2>Potvrda brisanja</h2>
+              <Dialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} slotProps={{ paper: { className: 'modal' } }}>
+                <DialogTitle>Potvrda brisanja</DialogTitle>
+                <DialogContent>
                   <p>Da li želiš obrisati odabrani uređaj?</p>
-                  <div className="modal-buttons">
-                    <button type="button" className="save-btn" onClick={confirmDelete}>
-                      Da, obriši
-                    </button>
-                    <button type="button" onClick={cancelDelete}>
-                      Ne, poništi
-                    </button>
-                  </div>
-                </div>
-              </div>
+                </DialogContent>
+                <DialogActions sx={{ gap: 1, padding: 2 }}>
+                  <Button className="action-btn" onClick={cancelDelete}>
+                    Ne, poništi
+                  </Button>
+                  <Button className="save-btn" onClick={confirmDelete}>
+                    Da, obriši
+                  </Button>
+                </DialogActions>
+              </Dialog>
             )}
             {showAssignGroupModal && (
-              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowAssignGroupModal(false); }}>
-                <div className="modal">
-                  <h2>Dodaj u grupu</h2>
+              <Dialog open={showAssignGroupModal} onClose={() => setShowAssignGroupModal(false)} slotProps={{ paper: { className: 'modal' } }}>
+                <DialogTitle>Dodaj u grupu</DialogTitle>
+                <DialogContent>
                   <p>Izaberi grupu za označene uređaje:</p>
-                  <FormControl size="small" sx={{ minWidth: 260 }}>
+                  <FormControl size="small" sx={{ minWidth: 260, marginTop: 1 }}>
                     <Select
                       value={selectedAssignGroupId ?? ""}
                       onChange={(e) =>
@@ -2680,45 +2722,45 @@ function App() {
                       ))}
                     </Select>
                   </FormControl>
-                  <div className="modal-buttons">
-                    <button type="button" className="save-btn" onClick={assignGroupToSelected}>
-                      Dodaj u grupu
-                    </button>
-                    <button type="button" onClick={cancelAssignGroup}>
-                      Otkaži
-                    </button>
-                  </div>
-                </div>
-              </div>
+                </DialogContent>
+                <DialogActions sx={{ gap: 1, padding: 2 }}>
+                  <Button className="action-btn" onClick={cancelAssignGroup}>
+                    Otkaži
+                  </Button>
+                  <Button className="save-btn" onClick={assignGroupToSelected}>
+                    Dodaj u grupu
+                  </Button>
+                </DialogActions>
+              </Dialog>
             )}
 
             {messageModal && (
-              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setMessageModal(null); }}>
-                <div className="modal">
-                  <h2>{messageModal.title}</h2>
+              <Dialog open={!!messageModal} onClose={() => setMessageModal(null)} slotProps={{ paper: { className: 'modal' } }}>
+                <DialogTitle>{messageModal.title}</DialogTitle>
+                <DialogContent>
                   {messageModal.title.toLowerCase().includes("log") ? (
                     <pre className="log-message-content">{messageModal.message}</pre>
                   ) : (
                     <p>{messageModal.message}</p>
                   )}
-                  <div className="modal-buttons">
-                    {messageModal.onConfirm ? (
-                      <>
-                        <button type="button" onClick={closeMessageModal}>
-                          {messageModal.cancelText || "Odustani"}
-                        </button>
-                        <button type="button" className="save-btn" onClick={handleMessageConfirm}>
-                          {messageModal.confirmText || "Potvrdi"}
-                        </button>
-                      </>
-                    ) : (
-                      <button type="button" className="save-btn" onClick={closeMessageModal}>
-                        U redu
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
+                </DialogContent>
+                <DialogActions sx={{ gap: 1, padding: 2 }}>
+                  {messageModal.onConfirm ? (
+                    <>
+                      <Button className="action-btn" onClick={closeMessageModal}>
+                        {messageModal.cancelText || "Odustani"}
+                      </Button>
+                      <Button className="save-btn" onClick={handleMessageConfirm}>
+                        {messageModal.confirmText || "Potvrdi"}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button className="save-btn" onClick={closeMessageModal}>
+                      U redu
+                    </Button>
+                  )}
+                </DialogActions>
+              </Dialog>
             )}
 
             <div className="stats">
@@ -2772,13 +2814,16 @@ function App() {
               {recentDeviceEvents.length === 0 ? (
                 <p className="empty-log">Nema zabilježenih aktivnosti još.</p>
               ) : (
-                <ul className="activity-log">
+                <List className="activity-log">
                   {recentDeviceEvents.map((entry, index) => (
-                    <li key={`${entry.deviceId}-${entry.time}-${index}`}>
-                      <strong>{entry.timestamp}</strong> - <span>{entry.deviceName}</span> - {entry.status} - {entry.note}
-                    </li>
+                    <ListItem key={`${entry.deviceId}-${entry.time}-${index}`}>
+                      <ListItemText
+                        primary={`${entry.timestamp} - ${entry.deviceName} - ${entry.status}`}
+                        secondary={entry.note}
+                      />
+                    </ListItem>
                   ))}
-                </ul>
+                </List>
               )}
             </div>
 
@@ -2797,7 +2842,6 @@ function App() {
             <div className="filters">
               <FormControl size="small" sx={{ minWidth: 180 }}>
                 <Select
-                  native
                   value={groupFilter ?? ""}
                   onChange={(e) =>
                     setGroupFilter(e.target.value ? Number(e.target.value) : null)
@@ -2808,18 +2852,17 @@ function App() {
                   }}
                   className="small-select select-box"
                 >
-                  <option value="">Sve grupe</option>
-                  <option value="-1">Bez grupe</option>
+                  <MenuItem value="">Sve grupe</MenuItem>
+                  <MenuItem value="-1">Bez grupe</MenuItem>
                   {groups.map((group) => (
-                    <option key={group.id} value={group.id}>
+                    <MenuItem key={group.id} value={group.id}>
                       {group.name}
-                    </option>
+                    </MenuItem>
                   ))}
                 </Select>
               </FormControl>
               <FormControl size="small" sx={{ minWidth: 160 }}>
                 <Select
-                  native
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
                   inputProps={{
@@ -2828,14 +2871,13 @@ function App() {
                   }}
                   className="small-select select-box"
                 >
-                  <option value="all">Sve statuse</option>
-                  <option value="online">Samo online</option>
-                  <option value="offline">Samo offline</option>
+                  <MenuItem value="all">Sve statuse</MenuItem>
+                  <MenuItem value="online">Samo online</MenuItem>
+                  <MenuItem value="offline">Samo offline</MenuItem>
                 </Select>
               </FormControl>
               <FormControl size="small" sx={{ minWidth: 160 }}>
                 <Select
-                  native
                   value={powerFilter}
                   onChange={(e) => setPowerFilter(e.target.value)}
                   inputProps={{
@@ -2844,14 +2886,13 @@ function App() {
                   }}
                   className="small-select select-box"
                 >
-                  <option value="all">Sve napajanja</option>
-                  <option value="on">Samo upaljeni</option>
-                  <option value="off">Samo ugašeni</option>
+                  <MenuItem value="all">Sve napajanja</MenuItem>
+                  <MenuItem value="on">Samo upaljeni</MenuItem>
+                  <MenuItem value="off">Samo ugašeni</MenuItem>
                 </Select>
               </FormControl>
               <FormControl size="small" sx={{ minWidth: 180 }}>
                 <Select
-                  native
                   value={activityFilter}
                   onChange={(e) => setActivityFilter(e.target.value)}
                   inputProps={{
@@ -2860,11 +2901,11 @@ function App() {
                   }}
                   className="small-select select-box"
                 >
-                  <option value="all">Sve aktivnosti</option>
-                  <option value="active24h">Aktivni 24h</option>
-                  <option value="active7d">Aktivni 7d</option>
-                  <option value="inactive7d">Neaktivni &gt; 7d</option>
-                  <option value="inactive30d">Neaktivni &gt; 30d</option>
+                  <MenuItem value="all">Sve aktivnosti</MenuItem>
+                  <MenuItem value="active24h">Aktivni 24h</MenuItem>
+                  <MenuItem value="active7d">Aktivni 7d</MenuItem>
+                  <MenuItem value="inactive7d">Neaktivni &gt; 7d</MenuItem>
+                  <MenuItem value="inactive30d">Neaktivni &gt; 30d</MenuItem>
                 </Select>
               </FormControl>
               <TextField
@@ -2907,15 +2948,15 @@ function App() {
             </div>
 
             <div className="actions">
-              <button type="button" className="action-btn restart-btn" onClick={handleRestartSelected}>
+              <Button className="action-btn restart-btn" onClick={handleRestartSelected}>
                 <span className="button-icon">🔄</span> Restart označenih
-              </button>
-              <button type="button" className="action-btn delete-selected-btn" onClick={handleDeleteSelected}>
+              </Button>
+              <Button className="action-btn delete-selected-btn" onClick={handleDeleteSelected}>
                 <span className="button-icon">🗑️</span> Obriši odabrane
-              </button>
-              <button type="button" className="action-btn assign-btn" onClick={openAssignGroupModal}>
+              </Button>
+              <Button className="action-btn assign-btn" onClick={openAssignGroupModal}>
                 <span className="button-icon">👥</span> Dodaj u grupu
-              </button>
+              </Button>
             </div>
 
             <div className="table-wrapper">
@@ -3073,57 +3114,50 @@ function App() {
                   <strong>{formatStatusText(selectedDevice.status)}</strong>
                 </div>
                 <div className="detail-actions">
-                  <button
-                    type="button"
+                  <Button
                     className="action-btn poweron-btn"
                     onClick={() => handlePowerOnDevice(selectedDevice.id)}
                   >
                     Uključi uređaj
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
                     className="action-btn poweroff-btn"
                     onClick={() => handlePowerOffDevice(selectedDevice.id)}
                   >
                     Isključi uređaj
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
                     className="action-btn restart-btn"
                     onClick={() => handleRestartDevice(selectedDevice.id)}
                   >
                     Restart uređaja
-                  </button>
+                  </Button>
                   {(["webos", "samsung"].includes(selectedDevice.brand?.toLowerCase() || "")) && (
                     <>
-                      <button
-                        type="button"
+                      <Button
                         className="action-btn"
                         onClick={() => handleSendDeviceAction(selectedDevice.id, "mute")}
                       >
                         🔇 Mute
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
                         className="action-btn"
                         onClick={() => handleSendDeviceAction(selectedDevice.id, "unmute")}
                       >
                         🔊 Unmute
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
                         className="action-btn"
                         onClick={() => handleSendDeviceAction(selectedDevice.id, "volumeUp")}
                       >
                         🔼 Vol+
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
                         className="action-btn"
                         onClick={() => handleSendDeviceAction(selectedDevice.id, "volumeDown")}
                       >
                         🔽 Vol-
-                      </button>
+                      </Button>
                       <div className="volume-set-row">
                         <TextField
                           type="number"
@@ -3134,8 +3168,7 @@ function App() {
                           placeholder="0-100"
                           className="small-input"
                         />
-                        <button
-                          type="button"
+                        <Button
                           className="action-btn"
                           disabled={
                             volumeValue.trim() === "" ||
@@ -3151,7 +3184,7 @@ function App() {
                           }}
                         >
                           🎚️ Postavi volumen
-                        </button>
+                        </Button>
                       </div>
                       <div className="launch-app-row">
                         <TextField
@@ -3162,8 +3195,7 @@ function App() {
                           placeholder="App ID ili URL"
                           className="small-input"
                         />
-                        <button
-                          type="button"
+                        <Button
                           className="action-btn"
                           disabled={!launchTarget.trim()}
                           onClick={() => {
@@ -3173,26 +3205,24 @@ function App() {
                           }}
                         >
                           🚀 Otvori aplikaciju
-                        </button>
+                        </Button>
                       </div>
                     </>
                   )}
                 </div>
                 <div className="detail-tabs">
-                  <button
-                    type="button"
+                  <Button
                     className={detailTab === "info" ? "tab-btn active" : "tab-btn"}
                     onClick={() => setDetailTab("info")}
                   >
                     Informacije
-                  </button>
-                  <button
-                    type="button"
+                  </Button>
+                  <Button
                     className={detailTab === "schedule" ? "tab-btn active" : "tab-btn"}
                     onClick={() => setDetailTab("schedule")}
                   >
                     Raspored
-                  </button>
+                  </Button>
                 </div>
                 {detailTab === "info" ? (
                   <div className="history-section">
@@ -3421,7 +3451,7 @@ function App() {
                               />
                             </>
                           )}
-                          <button type="button" className="action-btn" onClick={addStepToSequence}>Dodaj u sekvencu</button>
+                          <Button className="action-btn" onClick={addStepToSequence}>Dodaj u sekvencu</Button>
                         </div>
 
                         {scheduleSequence.length > 0 && (
@@ -3444,7 +3474,7 @@ function App() {
                                   {step.settleMs && <div className="muted">Settle: {step.settleMs} ms</div>}
                                 </div>
                                 <div className="sequence-step-actions">
-                                  <button type="button" onClick={() => removeStep(idx)}>✕</button>
+                                  <Button onClick={() => removeStep(idx)}>✕</Button>
                                 </div>
                               </div>
                             ))}
@@ -3474,8 +3504,7 @@ function App() {
                           label="Omogući raspored"
                         />
                         <div className="schedule-buttons">
-                          <button
-                            type="button"
+                          <Button
                             className="save-btn"
                             onClick={handleSaveSchedule}
                             disabled={
@@ -3486,10 +3515,10 @@ function App() {
                             }
                           >
                             Spremi
-                          </button>
-                          <button type="button" className="action-btn" onClick={clearScheduleForm}>
+                          </Button>
+                          <Button className="action-btn" onClick={clearScheduleForm}>
                             Očisti
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -3498,16 +3527,16 @@ function App() {
               </div>
             )}
             {showViewModal && viewModalDeviceInfo && (
-              <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) closeViewModal(); }}>
-                <div className="modal">
+              <Dialog open={showViewModal} onClose={closeViewModal} maxWidth="md" fullWidth slotProps={{ paper: { className: 'modal' } }}>
+                <DialogTitle>
                   <div className="modal-header">
                     <div>
                       <h2>Detalji: {viewModalDeviceInfo.name}</h2>
                       <p className="form-description">Brzi pregled uređaja i njegovi rasporedi.</p>
                     </div>
-                    <button type="button" className="close-btn" onClick={closeViewModal}>✕</button>
                   </div>
-
+                </DialogTitle>
+                <DialogContent dividers>
                   <div className="device-meta">
                     <div className="detail-row">
                       <span>IP adresa:</span>
@@ -3536,29 +3565,29 @@ function App() {
                   </div>
 
                   <div className="detail-actions">
-                    <button type="button" className="action-btn poweron-btn" onClick={() => handlePowerOnDevice(viewModalDeviceInfo.id)}>
+                    <Button className="action-btn poweron-btn" onClick={() => handlePowerOnDevice(viewModalDeviceInfo.id)}>
                       ✅ Uključi
-                    </button>
-                    <button type="button" className="action-btn poweroff-btn" onClick={() => handlePowerOffDevice(viewModalDeviceInfo.id)}>
+                    </Button>
+                    <Button className="action-btn poweroff-btn" onClick={() => handlePowerOffDevice(viewModalDeviceInfo.id)}>
                       ⏻ Isključi
-                    </button>
-                    <button type="button" className="action-btn restart-btn" onClick={() => handleRestartDevice(viewModalDeviceInfo.id)}>
+                    </Button>
+                    <Button className="action-btn restart-btn" onClick={() => handleRestartDevice(viewModalDeviceInfo.id)}>
                       🔄 Restart
-                    </button>
+                    </Button>
                     {(["webos", "samsung"].includes(viewModalDeviceInfo.brand?.toLowerCase() || "")) && (
                       <>
-                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "mute"); }}>
+                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "mute"); }}>
                           🔇 Mute
-                        </button>
-                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "unmute"); }}>
+                        </Button>
+                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "unmute"); }}>
                           🔊 Unmute
-                        </button>
-                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeUp"); }}>
+                        </Button>
+                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeUp"); }}>
                           🔼 Vol+
-                        </button>
-                        <button type="button" className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeDown"); }}>
+                        </Button>
+                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeDown"); }}>
                           🔽 Vol-
-                        </button>
+                        </Button>
                         <div className="volume-set-row">
                           <TextField
                             type="number"
@@ -3665,25 +3694,24 @@ function App() {
                                   {schedule.description && <div className="schedule-note">{schedule.description}</div>}
                                 </div>
                                 <div className="schedule-row-actions">
-                                  <button
-                                    type="button"
+                                  <Button
                                     className={schedule.enabled ? "action-btn poweron-btn" : "action-btn"}
                                     onClick={() => handleToggleSchedule(schedule)}
                                   >
                                     {schedule.enabled ? "✅ On" : "⭕ Off"}
-                                  </button>
-                                  <button type="button" className="action-btn" onClick={() => fetchScheduleLogs(schedule)}>
+                                  </Button>
+                                  <Button className="action-btn" onClick={() => fetchScheduleLogs(schedule)}>
                                     📄 Logovi
-                                  </button>
-                                  <button type="button" className="action-btn" onClick={() => handleTriggerSchedule(schedule)}>
+                                  </Button>
+                                  <Button className="action-btn" onClick={() => handleTriggerSchedule(schedule)}>
                                     ▶️ Pokreni
-                                  </button>
-                                  <button type="button" className="action-btn settings-btn" onClick={() => handleEditSchedule(schedule)}>
+                                  </Button>
+                                  <Button className="action-btn settings-btn" onClick={() => handleEditSchedule(schedule)}>
                                     ✏️ Uredi
-                                  </button>
-                                  <button type="button" className="action-btn delete-selected-btn" onClick={() => handleDeleteSchedule(schedule.id)}>
+                                  </Button>
+                                  <Button className="action-btn delete-selected-btn" onClick={() => handleDeleteSchedule(schedule.id)}>
                                     🗑️ Obriši
-                                  </button>
+                                  </Button>
                                 </div>
                               </div>
                             ))}
@@ -3767,8 +3795,7 @@ function App() {
                             label="Omogući raspored"
                           />
                           <div className="schedule-buttons">
-                            <button
-                              type="button"
+                            <Button
                               className="save-btn"
                               onClick={handleSaveSchedule}
                               disabled={
@@ -3779,17 +3806,17 @@ function App() {
                               }
                             >
                               Spremi
-                            </button>
-                            <button type="button" className="action-btn" onClick={clearScheduleForm}>
+                            </Button>
+                            <Button className="action-btn" onClick={clearScheduleForm}>
                               Očisti
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
+                </DialogContent>
+              </Dialog>
             )}
           </>
         )}
@@ -3818,7 +3845,11 @@ function App() {
       />
 
       {loading && <div className="loading-overlay">Osvježavanje...</div>}
-      {statusMessage && <div className="status-message">{statusMessage}</div>}
+      {statusMessage && (
+        <Alert severity="info" className="status-message" sx={{ mb: 2 }}>
+          {statusMessage}
+        </Alert>
+      )}
       
       <DeviceDiscoveryModal
         isOpen={showDiscoveryModal}

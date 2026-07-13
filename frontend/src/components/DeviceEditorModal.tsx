@@ -1,8 +1,13 @@
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
 import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Select from '@mui/material/Select';
 import MenuItem from '@mui/material/MenuItem';
+import Button from '@mui/material/Button';
 import type { Group } from "../types/app";
 
 interface DeviceEditorModalProps {
@@ -42,15 +47,19 @@ export default function DeviceEditorModal({
   onOpenDiscovery,
   onSave,
 }: DeviceEditorModalProps) {
-  if (!isOpen) {
-    return null;
-  }
-
   return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal">
-        <h2>{editingId !== null ? "Uredi uredaj" : "Dodaj uredaj"}</h2>
-
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      aria-labelledby="device-editor-dialog-title"
+      slotProps={{ paper: { className: 'modal' } }}
+      fullWidth
+      maxWidth="sm"
+    >
+      <DialogTitle id="device-editor-dialog-title">
+        {editingId !== null ? "Uredi uredaj" : "Dodaj uredaj"}
+      </DialogTitle>
+      <DialogContent>
         <TextField
           id="device-name"
           name="deviceName"
@@ -124,17 +133,16 @@ export default function DeviceEditorModal({
             ))}
           </Select>
         </FormControl>
-
-        <div className="modal-buttons">
-          <button type="button" onClick={onClose}>Otkaži</button>
-          <button type="button" className="discover-btn" onClick={onOpenDiscovery}>
-            🔍 Skeniraj TVe
-          </button>
-          <button type="button" className="save-btn" onClick={onSave}>
-            Spremi
-          </button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+      <DialogActions className="modal-buttons">
+        <Button onClick={onClose}>Otkaži</Button>
+        <Button onClick={onOpenDiscovery} className="discover-btn">
+          🔍 Skeniraj TVe
+        </Button>
+        <Button onClick={onSave} variant="contained" color="primary">
+          Spremi
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }

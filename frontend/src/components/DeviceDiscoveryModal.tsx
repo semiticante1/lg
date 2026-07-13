@@ -1,4 +1,12 @@
-import FormControlLabel from '@mui/material/FormControlLabel';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemText from '@mui/material/ListItemText';
+import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
+import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
 import type { DiscoveredDevice } from "../types/app";
 
@@ -23,15 +31,17 @@ export default function DeviceDiscoveryModal({
   onAddSelected,
   onSelectionChange,
 }: DeviceDiscoveryModalProps) {
-  if (!isOpen) {
-    return null;
-  }
-
   return (
-    <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal">
-        <h2>🔍 Skeniraj mrežu za TV uređaje</h2>
-
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      aria-labelledby="discovery-dialog-title"
+      slotProps={{ paper: { className: 'modal' } }}
+      fullWidth
+      maxWidth="sm"
+    >
+      <DialogTitle id="discovery-dialog-title">🔍 Skeniraj mrežu za TV uređaje</DialogTitle>
+      <DialogContent dividers>
         {discoveryLoading ? (
           <div className="discovery-loading">
             <p>Skeniram mrežu... Molim čekaj (~5 sekundi)...</p>
@@ -43,60 +53,54 @@ export default function DeviceDiscoveryModal({
         ) : (
           <div className="discovery-list">
             <p>Pronađeno {discoveredDevices.length} uređaja. Odaberi koje želiš dodati:</p>
-            <div className="discovery-devices">
+            <List dense>
               {discoveredDevices.map((device) => (
-                <div key={device.ip} className="discovery-device">
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        size="small"
-                        checked={selectedDiscoveredDevices.has(device.ip)}
-                        onChange={(e) => {
-                          const newSelected = new Set(selectedDiscoveredDevices);
-                          if (e.target.checked) {
-                            newSelected.add(device.ip);
-                          } else {
-                            newSelected.delete(device.ip);
-                          }
-                          onSelectionChange(newSelected);
-                        }}
-                      />
-                    }
-                    label={
-                      <div>
+                <ListItem key={device.ip} className="discovery-device" disablePadding>
+                  <ListItemText
+                    primary={
+                      <span>
                         <strong>{device.name}</strong>
-                        {device.already_added && <span className="badge-added">✓ Već dodan</span>}
-                        <small>{device.ip}</small>
-                      </div>
+                        {device.already_added && <span className="badge-added"> ✓ Već dodan</span>}
+                      </span>
                     }
-                    className="discovery-checkbox"
+                    secondary={device.ip}
                   />
-                </div>
+                  <ListItemSecondaryAction>
+                    <Checkbox
+                      size="small"
+                      edge="end"
+                      checked={selectedDiscoveredDevices.has(device.ip)}
+                      onChange={(e) => {
+                        const newSelected = new Set(selectedDiscoveredDevices);
+                        if (e.target.checked) {
+                          newSelected.add(device.ip);
+                        } else {
+                          newSelected.delete(device.ip);
+                        }
+                        onSelectionChange(newSelected);
+                      }}
+                    />
+                  </ListItemSecondaryAction>
+                </ListItem>
               ))}
-            </div>
+            </List>
           </div>
         )}
-
-        <div className="modal-buttons">
-          <button type="button" onClick={onClose}>Otkaži</button>
-          <button
-            type="button"
-            className="discover-btn"
-            onClick={onRetryDiscovery}
-            disabled={discoveryLoading}
-          >
-            {discoveryLoading ? "Skeniram..." : "🔄 Skeniraj ponovo"}
-          </button>
-          <button
-            type="button"
-            className="save-btn"
-            onClick={onAddSelected}
-            disabled={selectedDiscoveredDevices.size === 0 || discoveryLoading}
-          >
-            ✅ Dodaj ({selectedDiscoveredDevices.size})
-          </button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+      <DialogActions className="modal-buttons">
+        <Button onClick={onClose}>Otkaži</Button>
+        <Button onClick={onRetryDiscovery} disabled={discoveryLoading} className="discover-btn">
+          {discoveryLoading ? "Skeniram..." : "🔄 Skeniraj ponovo"}
+        </Button>
+        <Button
+          onClick={onAddSelected}
+          disabled={selectedDiscoveredDevices.size === 0 || discoveryLoading}
+          variant="contained"
+          color="primary"
+        >
+          ✅ Dodaj ({selectedDiscoveredDevices.size})
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 }
