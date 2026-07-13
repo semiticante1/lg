@@ -1,4 +1,22 @@
 import { useEffect, useRef, useState } from "react";
+import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import AppBar from '@mui/material/AppBar';
+import Toolbar from '@mui/material/Toolbar';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import Button from '@mui/material/Button';
+import Tooltip from '@mui/material/Tooltip';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import PowerIcon from '@mui/icons-material/Power';
+import PowerOffIcon from '@mui/icons-material/PowerOff';
+import AddIcon from '@mui/icons-material/Add';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import EditIcon from '@mui/icons-material/Edit';
+import ArticleIcon from '@mui/icons-material/Article';
+import RestartAltIcon from '@mui/icons-material/RestartAlt';
+import DeleteIcon from '@mui/icons-material/Delete';
 import "./App.css";
 import ScheduleBuilderModal from "./components/ScheduleBuilderModal";
 import DeviceDiscoveryModal from "./components/DeviceDiscoveryModal";
@@ -31,7 +49,16 @@ import {
 } from "./utils/schedule";
 
 function App() {
-  const [activePage, setActivePage] = useState("devices");
+  const [activePage, setActivePage] = useState<string>("devices");
+  const navigate = useNavigate();
+
+  // Helper component used in Routes to sync URL -> activePage state
+  const PageSetter = ({ page }: { page: string }) => {
+    useEffect(() => {
+      setActivePage(page);
+    }, [page]);
+    return null;
+  };
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deviceName, setDeviceName] = useState("");
@@ -80,7 +107,15 @@ function App() {
   // @ts-ignore - unused but may be needed for future use
   const [_tableLoading, _setTableLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState("");
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    try {
+      const saved = window.localStorage.getItem("appTheme");
+      if (saved === "dark" || saved === "light") return saved as "dark" | "light";
+    } catch (e) {
+      // ignore storage errors
+    }
+    return "dark";
+  });
   const initialLoadRef = useRef(false);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -106,12 +141,7 @@ function App() {
 
   const baseUrl = backendUrl.replace(/\/$/, "");
 
-  useEffect(() => {
-    const savedTheme = window.localStorage.getItem("appTheme");
-    if (savedTheme === "dark" || savedTheme === "light") {
-      setTheme(savedTheme);
-    }
-  }, []);
+  // theme is initialized synchronously from localStorage above
 
   useEffect(() => {
     window.localStorage.setItem("appTheme", theme);
@@ -129,8 +159,17 @@ function App() {
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme((current) => (current === "light" ? "dark" : "light"));
+    setTheme((current) => {
+      const next = current === "light" ? "dark" : "light";
+      try {
+        window.localStorage.setItem("appTheme", next);
+      } catch (e) {
+        // ignore storage errors
+      }
+      return next;
+    });
   };
+
 
   useEffect(() => {
     if (initialLoadRef.current) return;
@@ -956,12 +995,18 @@ function App() {
     setModalGroupId(null);
   };
 
+  const removeToast = (id: string) => {
+    setToastMessages((prev) => prev.filter((t) => t.id !== id));
+  };
+
   const showToast = (type: 'info' | 'success' | 'error', title: string, message: string) => {
-    const id = Date.now().toString();
-    setToastMessages((prev) => [...prev, { id, type, title, message }]);
-    setTimeout(() => {
-      setToastMessages((prev) => prev.filter((t) => t.id !== id));
-    }, 4000);
+    // prevent duplicate toasts for the same type/title/message
+    setToastMessages((prev) => {
+      const exists = prev.some((t) => t.type === type && t.title === title && t.message === message);
+      if (exists) return prev;
+      const id = Date.now().toString();
+      return [...prev, { id, type, title, message }];
+    });
   };
 
   const showMessage = (title: string, message: string) => {
@@ -1510,12 +1555,7 @@ function App() {
     setDetailTab("info");
   };
 
-  // Dropdown state for per-row actions
-  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
-
-  const toggleDropdown = (id: number) => {
-    setOpenDropdownId((current) => (current === id ? null : id));
-  };
+  // per-row dropdown was removed; actions are inline now
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -1527,18 +1567,13 @@ function App() {
         setShowAssignGroupModal(false);
         setMessageModal(null);
         setShowScheduleBuilder(false);
-        setOpenDropdownId(null);
       }
     };
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target;
       if (!(target instanceof Element)) return;
-      
-      // Close dropdown when clicking outside
-      if (!target.closest('.action-dropdown-wrapper')) {
-        setOpenDropdownId(null);
-      }
+      // other outside-click handlers remain for modals
     };
 
     document.addEventListener('keydown', handleKeyPress);
@@ -1582,7 +1617,6 @@ function App() {
       setSelectedDeviceId(id);
       setDetailTab("schedule");
       setShowViewModal(true);
-      setOpenDropdownId(null);
     }
   };
 
@@ -1838,14 +1872,14 @@ function App() {
   const handleOpenAuditForDevice = async (deviceId: number) => {
     setAuditDeviceFilter(String(deviceId));
     setAuditGroupFilter("all");
-    setActivePage("audit");
+    navigate('/audit');
     await loadAuditLogs(String(deviceId), "all");
   };
 
   const handleOpenAuditForGroup = async (groupId: number) => {
     setAuditGroupFilter(String(groupId));
     setAuditDeviceFilter("all");
-    setActivePage("audit");
+    navigate('/audit');
     await loadAuditLogs("all", String(groupId));
   };
 
@@ -1959,19 +1993,69 @@ function App() {
   const hasCritical = offlineCount > 0;
 
   return (
-    <div className={`app theme-${theme}`}>
+    <>
+      <AppBar position="fixed" color="default" elevation={3}>
+        <Toolbar>
+          <Typography variant="h6" component="div" style={{ flexGrow: 1 }}>
+            Herceg TV Control
+          </Typography>
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Tooltip title="Refresh">
+              <span>
+                <IconButton color="inherit" aria-label="refresh" onClick={refreshAll} disabled={loading}>
+                  <RefreshIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Power On All TVs">
+              <span>
+                <Button color="inherit" startIcon={<PowerIcon />} onClick={handlePowerOnAll}>
+                  Upali sve
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip title="Power Off All TVs">
+              <span>
+                <Button color="inherit" startIcon={<PowerOffIcon />} onClick={handlePowerOffAll}>
+                  Isključi sve
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip title="Add Device">
+              <span>
+                <Button color="inherit" startIcon={<AddIcon />} onClick={handleOpenModal}>
+                  Dodaj
+                </Button>
+              </span>
+            </Tooltip>
+            <IconButton color="inherit" aria-label="toggle theme" onClick={toggleTheme}>
+              {theme === "light" ? <DarkModeIcon /> : <LightModeIcon />}
+            </IconButton>
+          </div>
+        </Toolbar>
+      </AppBar>
+
+      <div className={`app theme-${theme}`}>
       <aside className="sidebar">
         <h2>TV Upravljač</h2>
         <div className="sidebar-menu">
-          <p className={activePage === "dashboard" ? "active" : ""} onClick={() => setActivePage("dashboard")}>📊 Početna</p>
-          <p className={activePage === "devices" ? "active" : ""} onClick={() => setActivePage("devices")}>📺 Uređaji</p>
-          <p className={activePage === "groups" ? "active" : ""} onClick={() => setActivePage("groups")}>👥 Grupe</p>
-          <p className={activePage === "audit" ? "active" : ""} onClick={() => setActivePage("audit")}>📜 Audit log</p>
-          <p className={activePage === "settings" ? "active" : ""} onClick={() => setActivePage("settings")}>⚙️ Postavke</p>
+          <NavLink to="/" end className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>📊 Početna</NavLink>
+          <NavLink to="/devices" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>📺 Uređaji</NavLink>
+          <NavLink to="/groups" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>👥 Grupe</NavLink>
+          <NavLink to="/audit" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>📜 Audit log</NavLink>
+          <NavLink to="/settings" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>⚙️ Postavke</NavLink>
         </div>
       </aside>
 
       <main className="content">
+        <Routes>
+          <Route path="/" element={<PageSetter page="dashboard" />} />
+          <Route path="/devices" element={<PageSetter page="devices" />} />
+          <Route path="/groups" element={<PageSetter page="groups" />} />
+          <Route path="/audit" element={<PageSetter page="audit" />} />
+          <Route path="/settings" element={<PageSetter page="settings" />} />
+          <Route path="*" element={<PageSetter page="notfound" />} />
+        </Routes>
         {activePage === "dashboard" && (
           <>
             <h1>Početna</h1>
@@ -2401,6 +2485,13 @@ function App() {
                 <p>Health podaci trenutno nisu dostupni.</p>
               )}
 
+            {String(activePage) === "notfound" && (
+              <>
+                <h1>404 - Stranica nije pronađena</h1>
+                <p className="page-description">Stranica koju tražiš ne postoji.</p>
+              </>
+            )}
+
               <br />
               <h3>Backup i restore baze</h3>
               <button type="button" className="save-btn" onClick={handleCreateBackup} disabled={backupLoading}>
@@ -2512,27 +2603,7 @@ function App() {
                 </p>
                 <p className="last-refresh">Zadnje osvježenje: {lastRefresh || "još nije osvježeno"}</p>
               </div>
-              <div className="top-bar-actions">
-                <div className="top-bar-group">
-                  <button type="button" className="theme-toggle-btn" onClick={toggleTheme}>
-                    {theme === "light" ? "🌙 Dark mode" : "☀️ Light mode"}
-                  </button>
-                  <button type="button" className="refresh-btn" onClick={refreshAll} disabled={loading}>
-                    <span className="button-icon">🔄</span> Osvježi
-                  </button>
-                </div>
-                <div className="top-bar-group">
-                  <button type="button" className="action-btn poweron-btn" onClick={handlePowerOnAll}>
-                    <span className="button-icon">🔌</span> Upali sve TV-e
-                  </button>
-                  <button type="button" className="action-btn poweroff-btn" onClick={handlePowerOffAll}>
-                    <span className="button-icon">⏻️</span> Isključi sve TV-e
-                  </button>
-                  <button type="button" className="add-btn" onClick={handleOpenModal}>
-                    <span className="button-icon">➕</span> Dodaj uređaj
-                  </button>
-                </div>
-              </div>
+              {/* Controls moved to global AppBar */}
             </div>
 
 
@@ -2858,33 +2929,39 @@ function App() {
                           </span>
                         </td>
                         <td>
-                          <div className="action-dropdown-wrapper">
-                            <button
-                              type="button"
-                              className="action-menu-btn"
-                              aria-haspopup="menu"
-                              aria-expanded={openDropdownId === device.id}
-                              onClick={() => toggleDropdown(device.id)}
-                            >
-                              ⋮
-                            </button>
-                            {openDropdownId === device.id && (
-                              <div className="action-dropdown" role="menu">
-                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { handleViewDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">👁️</span> Pogledaj</button>
-                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => {
-                                  setEditingId(device.id);
-                                  setDeviceName(device.name);
-                                  setDeviceIp(device.ip);
-                                  setDeviceMac(device.mac);
-                                  setModalGroupId(device.groupId ?? null);
-                                  setShowModal(true);
-                                  setOpenDropdownId(null);
-                                }}><span className="dropdown-item-icon">✏️</span> Uredi</button>
-                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { handleOpenAuditForDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">📜</span> Audit log</button>
-                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { handleRestartDevice(device.id); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🔄</span> Restart</button>
-                                <button type="button" className="dropdown-item" role="menuitem" onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); setOpenDropdownId(null); }}><span className="dropdown-item-icon">🗑️</span> Obriši</button>
-                              </div>
-                            )}
+                          <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                            <Tooltip title="Pogledaj">
+                              <IconButton size="small" sx={{ color: '#38bdf8', '&:hover': { backgroundColor: 'rgba(56, 189, 248, 0.16)' } }} onClick={() => handleViewDevice(device.id)}>
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Uredi">
+                              <IconButton size="small" sx={{ color: '#f59e0b', '&:hover': { backgroundColor: 'rgba(245, 158, 11, 0.16)' } }} onClick={() => {
+                                setEditingId(device.id);
+                                setDeviceName(device.name);
+                                setDeviceIp(device.ip);
+                                setDeviceMac(device.mac);
+                                setModalGroupId(device.groupId ?? null);
+                                setShowModal(true);
+                              }}>
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Audit log">
+                              <IconButton size="small" sx={{ color: '#64748b', '&:hover': { backgroundColor: 'rgba(100, 116, 139, 0.16)' } }} onClick={() => handleOpenAuditForDevice(device.id)}>
+                                <ArticleIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Restart">
+                              <IconButton size="small" sx={{ color: '#10b981', '&:hover': { backgroundColor: 'rgba(16, 185, 129, 0.16)' } }} onClick={() => handleRestartDevice(device.id)}>
+                                <RestartAltIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Obriši">
+                              <IconButton size="small" sx={{ color: '#ef4444', '&:hover': { backgroundColor: 'rgba(239, 68, 68, 0.16)' } }} onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); }}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           </div>
                         </td>
                       </tr>
@@ -3614,8 +3691,9 @@ function App() {
         deviceName={selectedDevice?.name || "Uređaj"}
       />
       
-      <ToastContainer messages={toastMessages} />
+      <ToastContainer messages={toastMessages} onRemove={removeToast} />
     </div>
+    </>
   );
 }
 

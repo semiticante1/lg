@@ -1,5 +1,6 @@
 :root {
   --bg: #0f1419;
+  --appbar-height: 64px;
   --body-bg: #0f1419;
   --surface: #1a202c;
   --surface-soft: #2d3748;
@@ -99,6 +100,7 @@ select {
   min-height: 100vh;
   gap: 20px;
   padding: 20px;
+  padding-top: calc(20px + var(--appbar-height));
   max-width: 100vw;
   overflow-x: hidden;
 }
@@ -132,6 +134,7 @@ select {
   .app {
     grid-template-columns: 1fr;
     padding: 18px;
+    --appbar-height: 56px;
   }
 
   .sidebar {
@@ -221,7 +224,21 @@ select {
   margin: 0;
   font-size: 1.45rem;
   letter-spacing: 0.01em;
-  color: var(--heading);
+  color: #ffffff;
+}
+
+.theme-light .sidebar {
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow), 0 0 36px rgba(59, 130, 246, 0.15);
+}
+
+.theme-light .sidebar::before {
+  background: radial-gradient(circle at bottom, rgba(59, 130, 246, 0.18), transparent 45%);
+}
+
+.theme-light .sidebar h2 {
+  color: #0f172a;
 }
 
 .sidebar-menu {
@@ -230,26 +247,42 @@ select {
   gap: 12px;
 }
 
+.sidebar-menu a,
 .sidebar-menu p {
   margin: 0;
   padding: 14px 18px;
   border-radius: 16px;
   cursor: pointer;
   transition: background 0.2s ease, transform 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-  color: var(--text);
+  color: #ffffff;
   display: flex;
   align-items: center;
   gap: 12px;
   border: 1px solid transparent;
   position: relative;
+  text-decoration: none;
 }
 
-.sidebar-menu p:hover {
+.theme-light .sidebar-menu a,
+.theme-light .sidebar-menu p {
+  color: #0f172a;
+}
+
+.sidebar-menu p:hover,
+.sidebar-menu a:hover {
   background: var(--surface-soft);
-  color: var(--heading);
+  color: #ffffff;
   transform: translateX(2px);
   border-color: var(--border);
   box-shadow: 0 0 20px var(--glow);
+}
+
+.theme-light .sidebar-menu p:hover,
+.theme-light .sidebar-menu a:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.12);
+  box-shadow: 0 0 18px rgba(15, 23, 42, 0.08);
 }
 
 .diagnostics-alert-box {
@@ -262,7 +295,8 @@ select {
   font-weight: 600;
 }
 
-.theme-light .sidebar-menu p.active {
+.theme-light .sidebar-menu p.active,
+.theme-light .sidebar-menu a.active {
   background: var(--accent);
   color: #ffffff;
   border-color: transparent;
@@ -270,7 +304,8 @@ select {
   box-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
 }
 
-.theme-dark .sidebar-menu p.active {
+.theme-dark .sidebar-menu p.active,
+.theme-dark .sidebar-menu a.active {
   background: var(--accent);
   color: #ffffff;
   border-color: transparent;

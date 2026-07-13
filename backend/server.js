@@ -1791,7 +1791,16 @@ app.post("/devices/:id/restart", async (req, res) => {
     });
 
     if (brand === "webos" || brand === "lg") {
-      await selfHealDeviceMac(device, "Restart auto-fix");
+      // Ensure we have a usable MAC (try input -> ARP -> fallback) before WoL fallback
+      const macCheck = await ensureValidDeviceMac(device.ip, device.mac);
+      if (macCheck.ok) {
+        device.mac = macCheck.mac;
+        // Persist ARP-discovered MACs back to DB so subsequent actions benefit
+        if (macCheck.source === "arp") {
+          await runAsync(`UPDATE devices SET mac = ? WHERE id = ?`, [macCheck.mac, device.id]);
+        }
+      }
+
       const restartProfile = buildRestartProfile(device);
 
       // For webOS: power off via webOS, then WoL after 8s (non-blocking)
@@ -1879,7 +1888,13 @@ app.post("/devices/restart", async (req, res) => {
     for (const device of devices) {
       const brand = (device.brand || "").trim().toLowerCase();
       if (brand === "webos" || brand === "lg") {
-        await selfHealDeviceMac(device, "Bulk restart auto-fix");
+        const macCheck = await ensureValidDeviceMac(device.ip, device.mac);
+        if (macCheck.ok) {
+          device.mac = macCheck.mac;
+          if (macCheck.source === "arp") {
+            await runAsync(`UPDATE devices SET mac = ? WHERE id = ?`, [macCheck.mac, device.id]);
+          }
+        }
         const restartProfile = buildRestartProfile(device);
         sendWebosRestart(device.ip, device.mac, restartProfile).then(async (ok) => {
           if (ok) {
@@ -2054,7 +2069,13 @@ app.post("/groups/:id/restart", async (req, res) => {
     for (const device of devices) {
       const brand = (device.brand || "").trim().toLowerCase();
       if (brand === "webos" || brand === "lg") {
-        await selfHealDeviceMac(device, "Group restart auto-fix");
+        const macCheck = await ensureValidDeviceMac(device.ip, device.mac);
+        if (macCheck.ok) {
+          device.mac = macCheck.mac;
+          if (macCheck.source === "arp") {
+            await runAsync(`UPDATE devices SET mac = ? WHERE id = ?`, [macCheck.mac, device.id]);
+          }
+        }
         const restartProfile = buildRestartProfile(device);
         sendWebosRestart(device.ip, device.mac, restartProfile).then(async (ok) => {
           if (ok) {
