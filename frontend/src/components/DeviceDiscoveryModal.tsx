@@ -1,3 +1,5 @@
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Checkbox from '@mui/material/Checkbox';
 import type { DiscoveredDevice } from "../types/app";
 
 interface DeviceDiscoveryModalProps {
@@ -44,27 +46,31 @@ export default function DeviceDiscoveryModal({
             <div className="discovery-devices">
               {discoveredDevices.map((device) => (
                 <div key={device.ip} className="discovery-device">
-                  <input
-                    type="checkbox"
-                    id={`device-${device.ip}`}
-                    checked={selectedDiscoveredDevices.has(device.ip)}
-                    onChange={(e) => {
-                      const newSelected = new Set(selectedDiscoveredDevices);
-                      if (e.target.checked) {
-                        newSelected.add(device.ip);
-                      } else {
-                        newSelected.delete(device.ip);
-                      }
-                      onSelectionChange(newSelected);
-                    }}
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={selectedDiscoveredDevices.has(device.ip)}
+                        onChange={(e) => {
+                          const newSelected = new Set(selectedDiscoveredDevices);
+                          if (e.target.checked) {
+                            newSelected.add(device.ip);
+                          } else {
+                            newSelected.delete(device.ip);
+                          }
+                          onSelectionChange(newSelected);
+                        }}
+                      />
+                    }
+                    label={
+                      <div>
+                        <strong>{device.name}</strong>
+                        {device.already_added && <span className="badge-added">✓ Već dodan</span>}
+                        <small>{device.ip}</small>
+                      </div>
+                    }
+                    className="discovery-checkbox"
                   />
-                  <label htmlFor={`device-${device.ip}`}>
-                    <div>
-                      <strong>{device.name}</strong>
-                      {device.already_added && <span className="badge-added">✓ Već dodan</span>}
-                    </div>
-                    <small>{device.ip}</small>
-                  </label>
                 </div>
               ))}
             </div>

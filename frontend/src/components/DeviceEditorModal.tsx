@@ -1,3 +1,8 @@
+import TextField from '@mui/material/TextField';
+import FormControl from '@mui/material/FormControl';
+import InputLabel from '@mui/material/InputLabel';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
 import type { Group } from "../types/app";
 
 interface DeviceEditorModalProps {
@@ -46,54 +51,79 @@ export default function DeviceEditorModal({
       <div className="modal">
         <h2>{editingId !== null ? "Uredi uredaj" : "Dodaj uredaj"}</h2>
 
-        <input
+        <TextField
           id="device-name"
           name="deviceName"
           value={deviceName}
           onChange={(e) => onDeviceNameChange(e.target.value)}
           placeholder="Naziv uređaja"
+          size="small"
+          variant="outlined"
+          fullWidth
+          className="small-input"
+          margin="dense"
         />
-        <input
+        <TextField
           id="device-ip"
           name="deviceIp"
           value={deviceIp}
           onChange={(e) => onDeviceIpChange(e.target.value)}
           placeholder="IP adresa"
+          size="small"
+          variant="outlined"
+          fullWidth
+          className="small-input"
+          margin="dense"
         />
-        <input
+        <TextField
           id="device-mac"
           name="deviceMac"
           value={deviceMac}
           onChange={(e) => onDeviceMacChange(e.target.value)}
           placeholder="MAC adresa"
+          size="small"
+          variant="outlined"
+          fullWidth
+          className="small-input"
+          margin="dense"
         />
-        <select
-          id="device-brand"
-          name="deviceBrand"
-          value={deviceBrand}
-          onChange={(e) => onDeviceBrandChange(e.target.value)}
-        >
-          <option value="generic">Generic</option>
-          <option value="webos">LG webOS</option>
-          <option value="samsung">Samsung</option>
-        </select>
-        <select
-          id="device-group"
-          name="modalGroupId"
-          value={modalGroupId ?? ""}
-          onChange={(e) =>
-            onModalGroupIdChange(
-              e.target.value ? Number(e.target.value) : null
-            )
-          }
-        >
-          <option value="">Bez grupe</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
+        <FormControl size="small" fullWidth margin="dense" className="small-select">
+          <InputLabel id="device-brand-label">Marka</InputLabel>
+          <Select
+            labelId="device-brand-label"
+            id="device-brand"
+            name="deviceBrand"
+            value={deviceBrand}
+            label="Marka"
+            onChange={(e) => onDeviceBrandChange(e.target.value)}
+          >
+            <MenuItem value="generic">Generic</MenuItem>
+            <MenuItem value="webos">LG webOS</MenuItem>
+            <MenuItem value="samsung">Samsung</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" fullWidth margin="dense" className="small-select">
+          <InputLabel id="device-group-label">Grupa</InputLabel>
+          <Select
+            labelId="device-group-label"
+            id="device-group"
+            name="modalGroupId"
+            value={modalGroupId ?? ""}
+            label="Grupa"
+            onChange={(e) =>
+              onModalGroupIdChange(
+                e.target.value ? Number(e.target.value) : null
+              )
+            }
+          >
+            <MenuItem value="">Bez grupe</MenuItem>
+            {groups.map((group) => (
+              <MenuItem key={group.id} value={group.id}>
+                {group.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
         <div className="modal-buttons">
           <button type="button" onClick={onClose}>Otkaži</button>

@@ -8,6 +8,12 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
+import TextField from '@mui/material/TextField';
+import FormControl from '@mui/material/FormControl';
+import Select from '@mui/material/Select';
+import MenuItem from '@mui/material/MenuItem';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Checkbox from '@mui/material/Checkbox';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PowerIcon from '@mui/icons-material/Power';
 import PowerOffIcon from '@mui/icons-material/PowerOff';
@@ -2290,9 +2296,11 @@ function App() {
               primjerice restartati sve uređaje u toj grupi.
             </p>
             <div className="group-actions">
-              <input
+              <TextField
                 className="small-input"
                 placeholder="Naziv nove grupe"
+                variant="outlined"
+                size="small"
                 value={groupName}
                 onChange={(e) => setGroupName(e.target.value)}
               />
@@ -2354,31 +2362,43 @@ function App() {
             </p>
 
             <div className="filters">
-              <select
-                className="small-select select-box"
-                value={auditDeviceFilter}
-                onChange={(e) => setAuditDeviceFilter(e.target.value)}
-              >
-                <option value="all">Svi uređaji</option>
-                {devices.map((device) => (
-                  <option key={device.id} value={String(device.id)}>
-                    {device.name}
-                  </option>
-                ))}
-              </select>
+              <FormControl size="small" className="small-select select-box" sx={{ minWidth: 220 }}>
+                <Select
+                  value={auditDeviceFilter}
+                  onChange={(e) => setAuditDeviceFilter(e.target.value)}
+                  displayEmpty
+                  inputProps={{
+                    name: "auditDeviceFilter",
+                    id: "audit-device-filter",
+                  }}
+                >
+                  <MenuItem value="all">Svi uređaji</MenuItem>
+                  {devices.map((device) => (
+                    <MenuItem key={device.id} value={String(device.id)}>
+                      {device.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-              <select
-                className="small-select select-box"
-                value={auditGroupFilter}
-                onChange={(e) => setAuditGroupFilter(e.target.value)}
-              >
-                <option value="all">Sve grupe</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={String(group.id)}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
+              <FormControl size="small" className="small-select select-box" sx={{ minWidth: 220 }}>
+                <Select
+                  value={auditGroupFilter}
+                  onChange={(e) => setAuditGroupFilter(e.target.value)}
+                  displayEmpty
+                  inputProps={{
+                    name: "auditGroupFilter",
+                    id: "audit-group-filter",
+                  }}
+                >
+                  <MenuItem value="all">Sve grupe</MenuItem>
+                  {groups.map((group) => (
+                    <MenuItem key={group.id} value={String(group.id)}>
+                      {group.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
               <button
                 type="button"
@@ -2442,22 +2462,29 @@ function App() {
             <h1>Postavke</h1>
             <div className="table-wrapper">
               <p>Backend URL:</p>
-              <input
+              <TextField
                 className="small-input"
+                size="small"
+                variant="outlined"
                 value={backendUrl}
                 onChange={(e) => setBackendUrl(e.target.value)}
               />
               <br />
               <br />
               <p>Scheduler:</p>
-              <select
-                className="small-select"
-                value={schedulerOn ? "on" : "off"}
-                onChange={(e) => setSchedulerOn(e.target.value === "on")}
-              >
-                <option value="on">Uključen</option>
-                <option value="off">Isključen</option>
-              </select>
+              <FormControl size="small" className="small-select" sx={{ minWidth: 180 }}>
+                <Select
+                  value={schedulerOn ? "on" : "off"}
+                  onChange={(e) => setSchedulerOn(e.target.value === "on")}
+                  inputProps={{
+                    name: "schedulerStatus",
+                    id: "scheduler-status",
+                  }}
+                >
+                  <MenuItem value="on">Uključen</MenuItem>
+                  <MenuItem value="off">Isključen</MenuItem>
+                </Select>
+              </FormControl>
               <br />
               <br />
               <button
@@ -2502,22 +2529,28 @@ function App() {
               </button>
               <br />
               <br />
-              <select
-                className="small-select"
-                value={selectedBackup}
-                onChange={(e) => setSelectedBackup(e.target.value)}
-                disabled={backupLoading || backupList.length === 0}
-              >
-                {backupList.length === 0 ? (
-                  <option value="">Nema backup fajlova</option>
-                ) : (
-                  backupList.map((backup) => (
-                    <option key={backup.name} value={backup.name}>
-                      {backup.name} ({Math.round(backup.sizeBytes / 1024)} KB)
-                    </option>
-                  ))
-                )}
-              </select>
+              <FormControl size="small" className="small-select" sx={{ minWidth: 240 }}>
+                <Select
+                  value={selectedBackup}
+                  onChange={(e) => setSelectedBackup(e.target.value)}
+                  disabled={backupLoading || backupList.length === 0}
+                  displayEmpty
+                  inputProps={{
+                    name: "backupSelection",
+                    id: "backup-selection",
+                  }}
+                >
+                  {backupList.length === 0 ? (
+                    <MenuItem value="">Nema backup fajlova</MenuItem>
+                  ) : (
+                    backupList.map((backup) => (
+                      <MenuItem key={backup.name} value={backup.name}>
+                        {backup.name} ({Math.round(backup.sizeBytes / 1024)} KB)
+                      </MenuItem>
+                    ))
+                  )}
+                </Select>
+              </FormControl>
               <br />
               <br />
               <button
@@ -2628,21 +2661,25 @@ function App() {
                 <div className="modal">
                   <h2>Dodaj u grupu</h2>
                   <p>Izaberi grupu za označene uređaje:</p>
-                  <select
-                    value={selectedAssignGroupId ?? ""}
-                    onChange={(e) =>
-                      setSelectedAssignGroupId(
-                        e.target.value ? Number(e.target.value) : null
-                      )
-                    }
-                  >
-                    <option value="">Odaberi grupu</option>
-                    {groups.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.name}
-                      </option>
-                    ))}
-                  </select>
+                  <FormControl size="small" sx={{ minWidth: 260 }}>
+                    <Select
+                      value={selectedAssignGroupId ?? ""}
+                      onChange={(e) =>
+                        setSelectedAssignGroupId(
+                          e.target.value ? Number(e.target.value) : null
+                        )
+                      }
+                      displayEmpty
+                      inputProps={{ name: 'assignGroup', id: 'assign-group-select' }}
+                    >
+                      <MenuItem value="">Odaberi grupu</MenuItem>
+                      {groups.map((group) => (
+                        <MenuItem key={group.id} value={group.id}>
+                          {group.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                   <div className="modal-buttons">
                     <button type="button" className="save-btn" onClick={assignGroupToSelected}>
                       Dodaj u grupu
@@ -2745,94 +2782,127 @@ function App() {
               )}
             </div>
 
-            <input
+            <TextField
               id="device-search"
               name="deviceSearch"
+              variant="outlined"
+              size="small"
               className="search-box"
               placeholder="Pretraži uređaj..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              sx={{ '& .MuiInputBase-root': { height: 42 } }}
             />
 
             <div className="filters">
-              <select
-                id="filter-group"
-                name="filterGroup"
-                className="small-select select-box"
-                value={groupFilter ?? ""}
-                onChange={(e) =>
-                  setGroupFilter(e.target.value ? Number(e.target.value) : null)
-                }
-              >
-                <option value="">Sve grupe</option>
-                <option value="-1">Bez grupe</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                id="filter-status"
-                name="filterStatus"
-                className="small-select select-box"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="all">Sve statuse</option>
-                <option value="online">Samo online</option>
-                <option value="offline">Samo offline</option>
-              </select>
-              <select
-                id="filter-power"
-                name="filterPower"
-                className="small-select select-box"
-                value={powerFilter}
-                onChange={(e) => setPowerFilter(e.target.value)}
-              >
-                <option value="all">Sve napajanja</option>
-                <option value="on">Samo upaljeni</option>
-                <option value="off">Samo ugašeni</option>
-              </select>
-              <select
-                id="filter-activity"
-                name="filterActivity"
-                className="small-select select-box"
-                value={activityFilter}
-                onChange={(e) => setActivityFilter(e.target.value)}
-              >
-                <option value="all">Sve aktivnosti</option>
-                <option value="active24h">Aktivni 24h</option>
-                <option value="active7d">Aktivni 7d</option>
-                <option value="inactive7d">Neaktivni &gt; 7d</option>
-                <option value="inactive30d">Neaktivni &gt; 30d</option>
-              </select>
-              <input
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <Select
+                  native
+                  value={groupFilter ?? ""}
+                  onChange={(e) =>
+                    setGroupFilter(e.target.value ? Number(e.target.value) : null)
+                  }
+                  inputProps={{
+                    name: "filterGroup",
+                    id: "filter-group",
+                  }}
+                  className="small-select select-box"
+                >
+                  <option value="">Sve grupe</option>
+                  <option value="-1">Bez grupe</option>
+                  {groups.map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <Select
+                  native
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  inputProps={{
+                    name: "filterStatus",
+                    id: "filter-status",
+                  }}
+                  className="small-select select-box"
+                >
+                  <option value="all">Sve statuse</option>
+                  <option value="online">Samo online</option>
+                  <option value="offline">Samo offline</option>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 160 }}>
+                <Select
+                  native
+                  value={powerFilter}
+                  onChange={(e) => setPowerFilter(e.target.value)}
+                  inputProps={{
+                    name: "filterPower",
+                    id: "filter-power",
+                  }}
+                  className="small-select select-box"
+                >
+                  <option value="all">Sve napajanja</option>
+                  <option value="on">Samo upaljeni</option>
+                  <option value="off">Samo ugašeni</option>
+                </Select>
+              </FormControl>
+              <FormControl size="small" sx={{ minWidth: 180 }}>
+                <Select
+                  native
+                  value={activityFilter}
+                  onChange={(e) => setActivityFilter(e.target.value)}
+                  inputProps={{
+                    name: "filterActivity",
+                    id: "filter-activity",
+                  }}
+                  className="small-select select-box"
+                >
+                  <option value="all">Sve aktivnosti</option>
+                  <option value="active24h">Aktivni 24h</option>
+                  <option value="active7d">Aktivni 7d</option>
+                  <option value="inactive7d">Neaktivni &gt; 7d</option>
+                  <option value="inactive30d">Neaktivni &gt; 30d</option>
+                </Select>
+              </FormControl>
+              <TextField
                 id="filter-registered-from"
                 name="filterRegisteredFrom"
                 type="date"
+                size="small"
                 className="small-input"
                 value={registrationFrom}
                 onChange={(e) => setRegistrationFrom(e.target.value)}
                 title="Registrirano od"
+                slotProps={{
+                  input: {
+                    sx: { padding: '10px 12px' },
+                  },
+                }}
+                sx={{ width: 180 }}
               />
-              <input
+              <TextField
                 id="filter-registered-to"
                 name="filterRegisteredTo"
                 type="date"
+                size="small"
                 className="small-input"
                 value={registrationTo}
                 onChange={(e) => setRegistrationTo(e.target.value)}
                 title="Registrirano do"
+                slotProps={{
+                  input: {
+                    sx: { padding: '10px 12px' },
+                  },
+                }}
+                sx={{ width: 180 }}
               />
               {selectedDevice && (
-                <button
-                  type="button"
-                  className="action-btn"
-                  onClick={handleClearSelection}
-                >
+                <Button type="button" className="action-btn" onClick={handleClearSelection}>
                   Zatvori detalje
-                </button>
+                </Button>
               )}
             </div>
 
@@ -2893,10 +2963,11 @@ function App() {
                     filteredDevices.map((device) => (
                       <tr key={device.id}>
                         <td>
-                          <input
-                            type="checkbox"
+                          <Checkbox
+                            size="small"
                             checked={device.selected}
                             onChange={() => toggleDevice(device.id)}
+                            sx={{ padding: '6px' }}
                           />
                         </td>
                         <td>{device.name}</td>
@@ -3054,10 +3125,10 @@ function App() {
                         🔽 Vol-
                       </button>
                       <div className="volume-set-row">
-                        <input
+                        <TextField
                           type="number"
-                          min={0}
-                          max={100}
+                          size="small"
+                          variant="outlined"
                           value={volumeValue}
                           onChange={(e) => setVolumeValue(e.target.value)}
                           placeholder="0-100"
@@ -3083,8 +3154,9 @@ function App() {
                         </button>
                       </div>
                       <div className="launch-app-row">
-                        <input
-                          type="text"
+                        <TextField
+                          size="small"
+                          variant="outlined"
                           value={launchTarget}
                           onChange={(e) => setLaunchTarget(e.target.value)}
                           placeholder="App ID ili URL"
@@ -3209,17 +3281,37 @@ function App() {
                         📅 Koristi vizualni raspored
                       </button>
                       <label>Cron izraz</label>
-                        <input
+                        <TextField
+                          size="small"
+                          variant="outlined"
                           value={scheduleCron}
                           onChange={(e) => setScheduleCron(e.target.value)}
                           placeholder="npr. 0 7 * * * ili 07:00"
+                          fullWidth
+                          className="small-input"
+                          margin="dense"
                         />
                         <div style={{display: 'flex', gap: 10, alignItems: 'center', marginTop: 8}}>
-                          <label style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                            <input type="checkbox" checked={scheduleUseTime} onChange={(e) => setScheduleUseTime(e.target.checked)} /> Koristi vrijeme (HH:MM)
-                          </label>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={scheduleUseTime}
+                                onChange={(e) => setScheduleUseTime(e.target.checked)}
+                              />
+                            }
+                            label="Koristi vrijeme (HH:MM)"
+                          />
                           {scheduleUseTime && (
-                            <input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
+                            <TextField
+                              type="time"
+                              size="small"
+                              variant="outlined"
+                              value={scheduleTime}
+                              onChange={(e) => setScheduleTime(e.target.value)}
+                              className="small-input"
+                              sx={{ minWidth: 150 }}
+                            />
                           )}
                         </div>
                         {scheduleUseTime && (
@@ -3232,16 +3324,22 @@ function App() {
                         <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja ili vrijeme HH:MM poput 07:00.</div>
                       )}
                       <label>Akcija</label>
-                      <select
-                        value={scheduleAction}
-                        onChange={(e) => setScheduleAction(e.target.value)}
-                      >
-                        {getAvailableActions(selectedDevice).map((action) => (
-                          <option key={action.value} value={action.value}>
-                            {action.label}
-                          </option>
-                        ))}
-                      </select>
+                      <FormControl size="small" className="small-select" sx={{ minWidth: 220 }}>
+                        <Select
+                          value={scheduleAction}
+                          onChange={(e) => setScheduleAction(e.target.value)}
+                          inputProps={{
+                            name: 'scheduleAction',
+                            id: 'schedule-action-select',
+                          }}
+                        >
+                          {getAvailableActions(selectedDevice).map((action) => (
+                            <MenuItem key={action.value} value={action.value}>
+                              {action.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
                       {selectedDevice && (
                         <div className="form-description">
                           Automatski otkrivene podržane akcije za {selectedDevice.brand}:
@@ -3251,7 +3349,9 @@ function App() {
                         </div>
                       )}
                       {(scheduleAction === "launchApp" || scheduleAction === "setVolume") && (
-                        <input
+                        <TextField
+                          size="small"
+                          variant="outlined"
                           value={scheduleTarget}
                           onChange={(e) => setScheduleTarget(e.target.value)}
                           placeholder={
@@ -3259,42 +3359,65 @@ function App() {
                               ? "App ID ili URL za otvaranje"
                               : "Volumen 0-100"
                           }
+                          className="small-input"
+                          fullWidth
                         />
                       )}
 
                       <div className="sequence-editor">
                         <h4>Sekvenca akcija (opcionalno)</h4>
                         <div className="sequence-add-row">
-                          <select value={currentStepAction} onChange={(e) => setCurrentStepAction(e.target.value)}>
-                            {getAvailableActions(selectedDevice).map((action) => (
-                              <option key={action.value} value={action.value}>
-                                {action.label}
-                              </option>
-                            ))}
-                          </select>
+                          <FormControl size="small" sx={{ minWidth: 180 }}>
+                            <Select
+                              value={currentStepAction}
+                              onChange={(e) => setCurrentStepAction(e.target.value)}
+                              inputProps={{
+                                name: 'currentStepAction',
+                                id: 'current-step-action-select',
+                              }}
+                            >
+                              {getAvailableActions(selectedDevice).map((action) => (
+                                <MenuItem key={action.value} value={action.value}>
+                                  {action.label}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
                           {(currentStepAction === "launchApp" || currentStepAction === "setVolume") && (
-                            <input
+                            <TextField
+                              size="small"
+                              variant="outlined"
                               value={currentStepParam}
                               onChange={(e) => setCurrentStepParam(e.target.value)}
                               placeholder={currentStepAction === "launchApp" ? "App ID ili URL" : "Volumen 0-100"}
+                              className="small-input"
                             />
                           )}
-                          <input
+                          <TextField
+                            size="small"
+                            variant="outlined"
                             value={currentStepDelay}
                             onChange={(e) => setCurrentStepDelay(e.target.value)}
                             placeholder="delay ms (npr. 5000)"
+                            className="small-input"
                           />
                           {currentStepAction === "poweron" && (
                             <>
-                              <input
+                              <TextField
+                                size="small"
+                                variant="outlined"
                                 value={currentStepWaitForReady}
                                 onChange={(e) => setCurrentStepWaitForReady(e.target.value)}
                                 placeholder="waitForReadyMs (ms, default 30000)"
+                                className="small-input"
                               />
-                              <input
+                              <TextField
+                                size="small"
+                                variant="outlined"
                                 value={currentStepSettle}
                                 onChange={(e) => setCurrentStepSettle(e.target.value)}
                                 placeholder="settleMs (ms, npr. 2000)"
+                                className="small-input"
                               />
                             </>
                           )}
@@ -3329,20 +3452,27 @@ function App() {
                         )}
                       </div>
                       <label>Opis</label>
-                      <input
+                      <TextField
+                        size="small"
+                        variant="outlined"
                         value={scheduleDescription}
                         onChange={(e) => setScheduleDescription(e.target.value)}
                         placeholder="Opis rasporeda"
+                        className="small-input"
+                        fullWidth
                       />
                       <div className="schedule-form-row">
-                        <label className="schedule-enable-label">
-                          <input
-                            type="checkbox"
-                            checked={scheduleEnabled}
-                            onChange={(e) => setScheduleEnabled(e.target.checked)}
-                          />
-                          Omogući raspored
-                        </label>
+                        <FormControlLabel
+                          className="schedule-enable-label"
+                          control={
+                            <Checkbox
+                              size="small"
+                              checked={scheduleEnabled}
+                              onChange={(e) => setScheduleEnabled(e.target.checked)}
+                            />
+                          }
+                          label="Omogući raspored"
+                        />
                         <div className="schedule-buttons">
                           <button
                             type="button"
@@ -3430,10 +3560,10 @@ function App() {
                           🔽 Vol-
                         </button>
                         <div className="volume-set-row">
-                          <input
+                          <TextField
                             type="number"
-                            min={0}
-                            max={100}
+                            size="small"
+                            variant="outlined"
                             value={volumeValue}
                             onChange={(e) => setVolumeValue(e.target.value)}
                             placeholder="0-100"
@@ -3459,8 +3589,9 @@ function App() {
                           </button>
                         </div>
                         <div className="launch-app-row">
-                          <input
-                            type="text"
+                          <TextField
+                            size="small"
+                            variant="outlined"
                             value={launchTarget}
                             onChange={(e) => setLaunchTarget(e.target.value)}
                             placeholder="App ID ili URL"
@@ -3571,10 +3702,14 @@ function App() {
                           📅 Koristi vizualni raspored
                         </button>
                         <label>Cron izraz</label>
-                        <input
+                        <TextField
+                          size="small"
+                          variant="outlined"
                           value={scheduleCron}
                           onChange={(e) => setScheduleCron(e.target.value)}
                           placeholder="npr. 0 7 * * * ili 07:00"
+                          fullWidth
+                          className="small-input"
                         />
                         <div className="schedule-help">
                           Unesi cron izraz s 5 polja ili vrijeme <strong>HH:MM</strong>.
@@ -3583,20 +3718,31 @@ function App() {
                           <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja ili vrijeme HH:MM poput 07:00.</div>
                         )}
                         <label>Akcija</label>
-                        <select value={scheduleAction} onChange={(e) => setScheduleAction(e.target.value)}>
-                          {getAvailableActions(viewModalDeviceInfo).map((action) => (
-                            <option key={action.value} value={action.value}>
-                              {action.label}
-                            </option>
-                          ))}
-                        </select>
+                        <FormControl size="small" className="small-select" sx={{ minWidth: 220 }}>
+                          <Select
+                            value={scheduleAction}
+                            onChange={(e) => setScheduleAction(e.target.value)}
+                            inputProps={{
+                              name: 'viewScheduleAction',
+                              id: 'view-schedule-action-select',
+                            }}
+                          >
+                            {getAvailableActions(viewModalDeviceInfo).map((action) => (
+                              <MenuItem key={action.value} value={action.value}>
+                                {action.label}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
                         {viewModalDeviceInfo && (
                           <div className="form-description">
                             Podržane akcije: {getAvailableActions(viewModalDeviceInfo).map((action) => action.label).join(", ")}
                           </div>
                         )}
                         {(scheduleAction === "launchApp" || scheduleAction === "setVolume") && (
-                          <input
+                          <TextField
+                            size="small"
+                            variant="outlined"
                             value={scheduleTarget}
                             onChange={(e) => setScheduleTarget(e.target.value)}
                             placeholder={
@@ -3604,17 +3750,22 @@ function App() {
                                 ? "App ID ili URL"
                                 : "Volumen 0-100"
                             }
+                            className="small-input"
+                            fullWidth
                           />
                         )}
                         <div className="schedule-form-row">
-                          <label className="schedule-enable-label">
-                            <input
-                              type="checkbox"
-                              checked={scheduleEnabled}
-                              onChange={(e) => setScheduleEnabled(e.target.checked)}
-                            />
-                            Omogući raspored
-                          </label>
+                          <FormControlLabel
+                            className="schedule-enable-label"
+                            control={
+                              <Checkbox
+                                size="small"
+                                checked={scheduleEnabled}
+                                onChange={(e) => setScheduleEnabled(e.target.checked)}
+                              />
+                            }
+                            label="Omogući raspored"
+                          />
                           <div className="schedule-buttons">
                             <button
                               type="button"
