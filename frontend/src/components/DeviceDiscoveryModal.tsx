@@ -8,6 +8,10 @@ import ListItemText from '@mui/material/ListItemText';
 import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
 import Button from '@mui/material/Button';
 import Checkbox from '@mui/material/Checkbox';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
+import CircularProgress from '@mui/material/CircularProgress';
 import type { DiscoveredDevice } from "../types/app";
 
 interface DeviceDiscoveryModalProps {
@@ -36,32 +40,37 @@ export default function DeviceDiscoveryModal({
       open={isOpen}
       onClose={onClose}
       aria-labelledby="discovery-dialog-title"
-      slotProps={{ paper: { className: 'modal' } }}
+      slotProps={{ paper: { sx: { borderRadius: 2 } } }}
       fullWidth
       maxWidth="sm"
     >
       <DialogTitle id="discovery-dialog-title">🔍 Skeniraj mrežu za TV uređaje</DialogTitle>
       <DialogContent dividers>
         {discoveryLoading ? (
-          <div className="discovery-loading">
-            <p>Skeniram mrežu... Molim čekaj (~5 sekundi)...</p>
-          </div>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 2 }}>
+            <CircularProgress size={20} />
+            <Typography variant="body2">Skeniram mrežu... Molim čekaj (~5 sekundi)...</Typography>
+          </Box>
         ) : discoveredDevices.length === 0 ? (
-          <div className="discovery-empty">
-            <p>Nisu pronađeni TV uređaji. Klikni "Skeniraj" da pokušaš ponovo.</p>
-          </div>
+          <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+            Nisu pronađeni TV uređaji. Klikni "Skeniraj" da pokušaš ponovo.
+          </Typography>
         ) : (
-          <div className="discovery-list">
-            <p>Pronađeno {discoveredDevices.length} uređaja. Odaberi koje želiš dodati:</p>
+          <Box>
+            <Typography variant="body2" sx={{ mb: 1.5 }}>
+              Pronađeno {discoveredDevices.length} uređaja. Odaberi koje želiš dodati:
+            </Typography>
             <List dense>
               {discoveredDevices.map((device) => (
-                <ListItem key={device.ip} className="discovery-device" disablePadding>
+                <ListItem key={device.ip} disablePadding sx={{ py: 0.5 }}>
                   <ListItemText
                     primary={
-                      <span>
-                        <strong>{device.name}</strong>
-                        {device.already_added && <span className="badge-added"> ✓ Već dodan</span>}
-                      </span>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography component="span" sx={{ fontWeight: 600 }}>
+                          {device.name}
+                        </Typography>
+                        {device.already_added && <Chip size="small" label="Već dodan" color="success" variant="outlined" />}
+                      </Box>
                     }
                     secondary={device.ip}
                   />
@@ -84,12 +93,12 @@ export default function DeviceDiscoveryModal({
                 </ListItem>
               ))}
             </List>
-          </div>
+          </Box>
         )}
       </DialogContent>
-      <DialogActions className="modal-buttons">
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
         <Button onClick={onClose}>Otkaži</Button>
-        <Button onClick={onRetryDiscovery} disabled={discoveryLoading} className="discover-btn">
+        <Button onClick={onRetryDiscovery} disabled={discoveryLoading} variant="outlined">
           {discoveryLoading ? "Skeniram..." : "🔄 Skeniraj ponovo"}
         </Button>
         <Button

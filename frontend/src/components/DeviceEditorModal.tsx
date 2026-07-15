@@ -52,7 +52,7 @@ export default function DeviceEditorModal({
       open={isOpen}
       onClose={onClose}
       aria-labelledby="device-editor-dialog-title"
-      slotProps={{ paper: { className: 'modal' } }}
+      slotProps={{ paper: { sx: { borderRadius: 2 } } }}
       fullWidth
       maxWidth="sm"
     >
@@ -69,7 +69,6 @@ export default function DeviceEditorModal({
           size="small"
           variant="outlined"
           fullWidth
-          className="small-input"
           margin="dense"
         />
         <TextField
@@ -81,7 +80,6 @@ export default function DeviceEditorModal({
           size="small"
           variant="outlined"
           fullWidth
-          className="small-input"
           margin="dense"
         />
         <TextField
@@ -93,10 +91,9 @@ export default function DeviceEditorModal({
           size="small"
           variant="outlined"
           fullWidth
-          className="small-input"
           margin="dense"
         />
-        <FormControl size="small" fullWidth margin="dense" className="small-select">
+        <FormControl size="small" fullWidth margin="dense">
           <InputLabel id="device-brand-label">Marka</InputLabel>
           <Select
             labelId="device-brand-label"
@@ -111,7 +108,7 @@ export default function DeviceEditorModal({
             <MenuItem value="samsung">Samsung</MenuItem>
           </Select>
         </FormControl>
-        <FormControl size="small" fullWidth margin="dense" className="small-select">
+        <FormControl size="small" fullWidth margin="dense">
           <InputLabel id="device-group-label">Grupa</InputLabel>
           <Select
             labelId="device-group-label"
@@ -134,9 +131,9 @@ export default function DeviceEditorModal({
           </Select>
         </FormControl>
       </DialogContent>
-      <DialogActions className="modal-buttons">
+      <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
         <Button onClick={onClose}>Otkaži</Button>
-        <Button onClick={onOpenDiscovery} className="discover-btn">
+        <Button onClick={onOpenDiscovery} variant="outlined">
           🔍 Skeniraj TVe
         </Button>
         <Button onClick={onSave} variant="contained" color="primary">

@@ -31,7 +31,7 @@ export interface DeviceSchedule {
   device_id: number;
   cron: string;
   action: string;
-  action_params: Record<string, any>;
+  action_params: Record<string, unknown>;
   description: string | null;
   enabled: boolean;
 }
@@ -119,7 +119,7 @@ export interface DiagnosticsSummary {
     status: string;
     error?: string;
   } | null;
-  maintenanceHistory: Array<Record<string, any>>;
-  runtimeIssues: Array<Record<string, any>>;
-  recentFailedAudit: Array<Record<string, any>>;
+  maintenanceHistory: Array<Record<string, unknown>>;
+  runtimeIssues: Array<Record<string, unknown>>;
+  recentFailedAudit: Array<Record<string, unknown>>;
 }

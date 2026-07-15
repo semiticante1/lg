@@ -1,50 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
-import AppBar from '@mui/material/AppBar';
-import Toolbar from '@mui/material/Toolbar';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
-import Button from '@mui/material/Button';
-import Tooltip from '@mui/material/Tooltip';
-import TextField from '@mui/material/TextField';
-import Dialog from '@mui/material/Dialog';
-import DialogTitle from '@mui/material/DialogTitle';
-import DialogContent from '@mui/material/DialogContent';
-import DialogActions from '@mui/material/DialogActions';
-import FormControl from '@mui/material/FormControl';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import Checkbox from '@mui/material/Checkbox';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TableRow from '@mui/material/TableRow';
-import Paper from '@mui/material/Paper';
-import Grid from '@mui/material/Grid';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
-import CardActions from '@mui/material/CardActions';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemText from '@mui/material/ListItemText';
+﻿import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
 import Alert from '@mui/material/Alert';
-import LinearProgress from '@mui/material/LinearProgress';
-import CircularProgress from '@mui/material/CircularProgress';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import PowerIcon from '@mui/icons-material/Power';
-import PowerOffIcon from '@mui/icons-material/PowerOff';
-import AddIcon from '@mui/icons-material/Add';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import EditIcon from '@mui/icons-material/Edit';
-import ArticleIcon from '@mui/icons-material/Article';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import DeleteIcon from '@mui/icons-material/Delete';
-import "./App.css";
+import Container from '@mui/material/Container';
+import Typography from '@mui/material/Typography';
+import { createAppTheme } from './theme';
+import AppLayout from './components/AppLayout';
 import ScheduleBuilderModal from "./components/ScheduleBuilderModal";
 import DeviceDiscoveryModal from "./components/DeviceDiscoveryModal";
 import DeviceEditorModal from "./components/DeviceEditorModal";
@@ -72,20 +34,50 @@ import {
   getActionLabel,
   getAvailableActionsForDevice,
   isCronValid,
-  normalizeCronExpression,
 } from "./utils/schedule";
 
-function App() {
-  const [activePage, setActivePage] = useState<string>("devices");
-  const navigate = useNavigate();
+type ScheduleStep = {
+  action: string;
+  params?: Record<string, unknown>;
+  delayMs?: number;
+  waitForReadyMs?: number;
+  settleMs?: number;
+};
 
-  // Helper component used in Routes to sync URL -> activePage state
-  const PageSetter = ({ page }: { page: string }) => {
-    useEffect(() => {
-      setActivePage(page);
-    }, [page]);
-    return null;
-  };
+type DeviceApiShape = Device & {
+  power_state?: string;
+};
+
+type BulkPowerResult = {
+  poweredOn?: boolean;
+  poweredOff?: boolean;
+};
+
+const DashboardPage = lazy(() => import('./components/Dashboard'));
+const DevicesPage = lazy(() => import('./components/Devices'));
+const GroupsPage = lazy(() => import('./components/Groups'));
+const AuditPage = lazy(() => import('./components/Audit'));
+const SettingsPage = lazy(() => import('./components/Settings'));
+
+function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const activePage = (() => {
+    switch (location.pathname) {
+      case "/":
+        return "dashboard";
+      case "/devices":
+        return "devices";
+      case "/groups":
+        return "groups";
+      case "/audit":
+        return "audit";
+      case "/settings":
+        return "settings";
+      default:
+        return "notfound";
+    }
+  })();
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deviceName, setDeviceName] = useState("");
@@ -107,13 +99,8 @@ function App() {
   const [scheduleTarget, setScheduleTarget] = useState("");
   const [scheduleDescription, setScheduleDescription] = useState("");
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
-  const [scheduleSequence, setScheduleSequence] = useState<any[]>([]);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [scheduleSequence, setScheduleSequence] = useState<ScheduleStep[]>([]);
   const [currentStepAction, setCurrentStepAction] = useState("poweron");
-  const [currentStepParam, setCurrentStepParam] = useState("");
-  const [currentStepDelay, setCurrentStepDelay] = useState("");
-  const [currentStepWaitForReady, setCurrentStepWaitForReady] = useState("");
-  const [currentStepSettle, setCurrentStepSettle] = useState("");
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
   const [detailTab, setDetailTab] = useState<"info" | "schedule">("info");
   const [groupFilter, setGroupFilter] = useState<number | null>(null);
@@ -131,14 +118,12 @@ function App() {
   const [auditDeviceFilter, setAuditDeviceFilter] = useState<string>("all");
   const [auditGroupFilter, setAuditGroupFilter] = useState<string>("all");
   const [loading, setLoading] = useState(false);
-  // @ts-ignore - unused but may be needed for future use
-  const [_tableLoading, _setTableLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     try {
       const saved = window.localStorage.getItem("appTheme");
       if (saved === "dark" || saved === "light") return saved as "dark" | "light";
-    } catch (e) {
+    } catch {
       // ignore storage errors
     }
     return "dark";
@@ -165,8 +150,18 @@ function App() {
   const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
   const diagnosticsAlertCountRef = useRef(0);
   const discoveryInitiatedRef = useRef(false);
+  const forcedOffIdsRef = useRef<Set<number>>(new Set());
+  const devicesRef = useRef<Device[]>([]);
+  const refreshAllRef = useRef<() => Promise<void>>(async () => {});
+  const loadDevicesRef = useRef<() => Promise<void>>(async () => {});
+  const loadHealthSummaryRef = useRef<() => Promise<void>>(async () => {});
+  const loadBackupsRef = useRef<() => Promise<void>>(async () => {});
+  const loadDiagnosticsRef = useRef<() => Promise<void>>(async () => {});
+  const loadDeviceSchedulesRef = useRef<(deviceId: number) => Promise<void>>(async () => {});
+  const handleStartDiscoveryRef = useRef<() => Promise<void>>(async () => {});
 
   const baseUrl = backendUrl.replace(/\/$/, "");
+  devicesRef.current = devices;
 
   // theme is initialized synchronously from localStorage above
 
@@ -179,9 +174,15 @@ function App() {
     try {
       document.body.classList.remove('theme-light', 'theme-dark');
       document.body.classList.add(`theme-${theme}`);
-    } catch (e) {}
+    } catch {
+      // ignore DOM/classList errors
+    }
     return () => {
-      try { document.body.classList.remove('theme-light', 'theme-dark'); } catch (e) {}
+      try {
+        document.body.classList.remove('theme-light', 'theme-dark');
+      } catch {
+        // ignore DOM/classList errors
+      }
     };
   }, [theme]);
 
@@ -190,25 +191,46 @@ function App() {
       const next = current === "light" ? "dark" : "light";
       try {
         window.localStorage.setItem("appTheme", next);
-      } catch (e) {
+      } catch {
         // ignore storage errors
       }
       return next;
     });
   };
 
+  const resolvePowerStateWithForcedOff = (
+    incoming: { id: number; powerState?: string; power_state?: string; status?: string },
+    fallback?: Device
+  ) => {
+    const rawPower = incoming.powerState || incoming.power_state || fallback?.powerState || "Off";
+    const normalizedPower = String(rawPower).toLowerCase();
+    let resolved: "On" | "Off" = normalizedPower === "on" ? "On" : "Off";
+
+    if (forcedOffIdsRef.current.has(incoming.id)) {
+      const normalizedStatus = String(incoming.status || fallback?.status || "").toLowerCase();
+      const confirmedBackOn = resolved === "On" && normalizedStatus === "online";
+      if (confirmedBackOn) {
+        forcedOffIdsRef.current.delete(incoming.id);
+      } else {
+        resolved = "Off";
+      }
+    }
+
+    return resolved;
+  };
+
 
   useEffect(() => {
     if (initialLoadRef.current) return;
     initialLoadRef.current = true;
-    refreshAll();
+    void refreshAllRef.current();
   }, []);
 
   const loadAuditLogs = async (deviceId?: string, groupId?: string) => {
     setAuditLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("limit", "300");
+      params.set("limit", "7");
       if (deviceId && deviceId !== "all") {
         params.set("deviceId", deviceId);
       }
@@ -232,7 +254,7 @@ function App() {
       if (document.visibilityState !== "visible") {
         return;
       }
-      await loadDevices();
+      await loadDevicesRef.current();
       setLastRefresh(new Date().toLocaleTimeString());
       setStatusMessage("Automatsko osvježenje statusa");
       setTimeout(() => setStatusMessage(""), 2000);
@@ -282,10 +304,19 @@ function App() {
             const msg = JSON.parse(ev.data);
             if (msg.type === 'device:update' && msg.device) {
               const dev = msg.device;
-              setDevices((prev) => prev.map((d) => (d.id === dev.id ? { ...d, ...dev, powerState: dev.power_state || dev.powerState } : d)));
-              recordDeviceEvent({ ...(devices.find((x) => x.id === dev.id) || dev), powerState: dev.power_state || dev.powerState }, 'State updated from server');
+              const current = devicesRef.current.find((x) => x.id === dev.id);
+              const resolvedPowerState = resolvePowerStateWithForcedOff(dev, current);
+              setDevices((prev) => prev.map((d) => (d.id === dev.id ? { ...d, ...dev, powerState: resolvedPowerState } : d)));
+              recordDeviceEvent({ ...(current || dev), powerState: resolvedPowerState }, 'State updated from server');
             } else if (msg.type === 'devices:init' && Array.isArray(msg.devices)) {
-              setDevices(msg.devices.map((d: any) => ({ ...d, powerState: d.power_state || d.powerState || 'Off' })));
+              setDevices(
+                msg.devices.map((raw: unknown) => {
+                  const d = raw as DeviceApiShape;
+                  const current = devicesRef.current.find((x) => x.id === d.id);
+                  const resolvedPowerState = resolvePowerStateWithForcedOff(d, current);
+                  return { ...d, powerState: resolvedPowerState };
+                })
+              );
             }
           } catch (e) {
             console.error('WS message parse error', e);
@@ -338,7 +369,7 @@ function App() {
     };
   }, [baseUrl]);
 
-  const refreshAll = async () => {
+  async function refreshAll() {
     setLoading(true);
     await Promise.all([
       loadDevices(),
@@ -350,7 +381,7 @@ function App() {
     setLastRefresh(new Date().toLocaleTimeString());
     setStatusMessage("Status osvježen");
     setTimeout(() => setStatusMessage(""), 2000);
-  };
+  }
 
   const loadHealthSummary = async () => {
     setHealthLoading(true);
@@ -525,31 +556,38 @@ function App() {
 
   useEffect(() => {
     if (activePage === "settings") {
-      loadHealthSummary();
-      loadBackups();
-      loadDiagnostics();
+      const timer = window.setTimeout(() => {
+        void loadHealthSummaryRef.current();
+        void loadBackupsRef.current();
+        void loadDiagnosticsRef.current();
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [activePage, baseUrl]);
 
-  const loadDevices = async () => {
+  async function loadDevices() {
     try {
       const response = await fetch(`${baseUrl}/devices`);
-      const data = await response.json();
-      const mappedDevices = data.map((device: any) => ({
-        ...device,
-        brand: device.brand || "generic",
-        powerState: device.powerState || device.power_state || "Off",
-        selected: false,
-      }));
+      const data = (await response.json()) as DeviceApiShape[];
+      const mappedDevices = data.map((device) => {
+        const current = devicesRef.current.find((d) => d.id === device.id);
+        const resolvedPowerState = resolvePowerStateWithForcedOff(device, current);
+        return {
+          ...device,
+          brand: device.brand || "generic",
+          powerState: resolvedPowerState,
+          selected: false,
+        };
+      });
 
       setDevices(mappedDevices);
-      mappedDevices.forEach((device: any) => {
+      mappedDevices.forEach((device) => {
         recordDeviceEvent(device, `Automatska provjera statusa: ${device.status}`);
       });
     } catch (error) {
       console.error("Učitavanje uređaja nije uspjelo:", error);
     }
-  };
+  }
 
   const loadGroups = async () => {
     try {
@@ -574,8 +612,11 @@ function App() {
 
   useEffect(() => {
     if (selectedDeviceId !== null) {
-      loadDeviceSchedules(selectedDeviceId);
-      setDetailTab("info");
+      const timer = window.setTimeout(() => {
+        void loadDeviceSchedulesRef.current(selectedDeviceId);
+        setDetailTab("info");
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
   }, [selectedDeviceId, baseUrl]);
 
@@ -598,6 +639,7 @@ function App() {
   const cronValid = isCronValid(scheduleCron);
 
   const handleEditSchedule = (schedule: DeviceSchedule) => {
+    const actionParams = (schedule.action_params ?? {}) as Record<string, unknown>;
     const available = getAvailableActions(selectedDevice);
     const supportedAction = available.some((action) => action.value === schedule.action)
       ? schedule.action
@@ -608,9 +650,13 @@ function App() {
     setScheduleAction(supportedAction);
     setScheduleTarget(
       supportedAction === "launchApp"
-        ? schedule.action_params?.target || ""
+        ? typeof actionParams.target === "string"
+          ? actionParams.target
+          : ""
         : supportedAction === "setVolume"
-        ? String(schedule.action_params?.volume || "")
+        ? typeof actionParams.volume === "number" || typeof actionParams.volume === "string"
+          ? String(actionParams.volume)
+          : ""
         : ""
     );
     setScheduleDescription(schedule.description || "");
@@ -618,13 +664,13 @@ function App() {
     setDetailTab("schedule");
     // populate sequence if stored as sequence
     try {
-      const params = schedule.action_params || {};
-      if (schedule.action === "sequence" && params && Array.isArray(params.sequence)) {
-        setScheduleSequence(params.sequence.map((s: any) => ({ ...s })));
+      const params = actionParams;
+      if (schedule.action === "sequence" && Array.isArray(params.sequence)) {
+        setScheduleSequence(params.sequence.map((s) => ({ ...(s as ScheduleStep) })));
       } else {
         setScheduleSequence([]);
       }
-    } catch (e) {
+    } catch {
       setScheduleSequence([]);
     }
     // detect simple HH:MM cron form like "MM HH * * *" and present friendly time
@@ -638,163 +684,9 @@ function App() {
           setScheduleTime(`${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`);
         }
       }
-    } catch (e) {}
-  };
-
-  const handleSaveSchedule = async () => {
-    if (!selectedDeviceId) {
-      showMessage("Greška", "Nema odabranog uređaja za raspored.");
-      return;
+    } catch {
+      // ignore cron parsing errors
     }
-
-    // determine cron expression: prefer friendly time if selected
-    const cronInput = scheduleUseTime && scheduleTime ? scheduleTime.trim() : scheduleCron.trim();
-    if (!cronInput) {
-      showMessage("Greška", "Unesi cron izraz ili vrijeme HH:MM.");
-      return;
-    }
-
-    const normalizedCron = normalizeCronExpression(cronInput);
-    if (!normalizedCron || !isCronValid(cronInput)) {
-      showMessage("Greška", "Cron izraz nije valjan. Koristi format s 5 polja poput: 0 7 * * * ili vrijeme HH:MM.");
-      return;
-    }
-
-    if (scheduleAction === "launchApp" && !scheduleTarget.trim()) {
-      showMessage("Greška", "Unesi aplikaciju ili URL.");
-      return;
-    }
-
-    if (scheduleAction === "setVolume") {
-      const volume = Number(scheduleTarget);
-      if (Number.isNaN(volume) || volume < 0 || volume > 100) {
-        showMessage("Greška", "Unesi volumen između 0 i 100.");
-        return;
-      }
-    }
-
-    // Build payload: if sequence steps exist, send as `actions` array
-    let payload: any;
-    if (Array.isArray(scheduleSequence) && scheduleSequence.length > 0) {
-      payload = {
-        cron: normalizedCron,
-        actions: scheduleSequence.map((s) => ({
-          action: s.action,
-          params: s.params || {},
-          delayMs: s.delayMs || undefined,
-          waitForReadyMs: s.waitForReadyMs || undefined,
-          settleMs: s.settleMs || undefined,
-        })),
-        description: scheduleDescription.trim(),
-        enabled: scheduleEnabled,
-      };
-    } else {
-      payload = {
-        cron: normalizedCron,
-        action: scheduleAction,
-        action_params:
-          scheduleAction === "launchApp"
-            ? { target: scheduleTarget.trim() }
-            : scheduleAction === "setVolume"
-            ? { volume: Number(scheduleTarget) }
-            : {},
-        description: scheduleDescription.trim(),
-        enabled: scheduleEnabled,
-      };
-    }
-
-    const available = getAvailableActions(selectedDevice);
-    if (!available.some((action) => action.value === scheduleAction)) {
-      showMessage("Greška", "Odabrana akcija nije podržana za ovaj uređaj.");
-      return;
-    }
-
-    try {
-      const url = editingScheduleId
-        ? `${baseUrl}/devices/${selectedDeviceId}/schedules/${editingScheduleId}`
-        : `${baseUrl}/devices/${selectedDeviceId}/schedules`;
-      const method = editingScheduleId ? "PUT" : "POST";
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        showMessage("Greška", errorData?.error || "Neuspješno spremanje rasporeda.");
-        return;
-      }
-
-      await loadDeviceSchedules(selectedDeviceId);
-      clearScheduleForm();
-      showMessage("Info", "Raspored spremljen.");
-    } catch (error) {
-      console.error("Spremanje rasporeda nije uspjelo:", error);
-      showMessage("Greška", "Greška pri spremanju rasporeda.");
-    }
-  };
-
-  const addStepToSequence = () => {
-    const step: any = { action: currentStepAction };
-    if (currentStepParam && currentStepAction === "launchApp") {
-      step.params = { target: currentStepParam.trim() };
-    }
-    if (currentStepParam && currentStepAction === "setVolume") {
-      const v = Number(currentStepParam);
-      if (!Number.isNaN(v)) {
-        step.params = { volume: v };
-      }
-    }
-    if (currentStepDelay) step.delayMs = Number(currentStepDelay);
-    if (currentStepWaitForReady) step.waitForReadyMs = Number(currentStepWaitForReady);
-    if (currentStepSettle) step.settleMs = Number(currentStepSettle);
-
-    setScheduleSequence((prev) => [...prev, step]);
-
-    // reset current step fields
-    setCurrentStepParam("");
-    setCurrentStepDelay("");
-    setCurrentStepWaitForReady("");
-    setCurrentStepSettle("");
-  };
-
-  const removeStep = (index: number) => {
-    setScheduleSequence((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  
-
-  const reorderSteps = (from: number, to: number) => {
-    setScheduleSequence((prev) => {
-      const arr = [...prev];
-      if (from < 0 || from >= arr.length) return arr;
-      const item = arr.splice(from, 1)[0];
-      // if dropping after removal and target index equals length, push to end
-      const insertAt = Math.min(Math.max(0, to), arr.length);
-      arr.splice(insertAt, 0, item);
-      return arr;
-    });
-    setDragIndex(null);
-  };
-
-  const onDragStart = (e: React.DragEvent, idx: number) => {
-    try {
-      e.dataTransfer.setData('text/plain', String(idx));
-      e.dataTransfer.effectAllowed = 'move';
-      setDragIndex(idx);
-    } catch (err) {}
-  };
-
-  const onDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const onDrop = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    const from = Number(e.dataTransfer.getData('text/plain'));
-    if (!Number.isNaN(from)) reorderSteps(from, idx);
   };
 
   const handleDeleteSchedule = async (scheduleId: number) => {
@@ -942,7 +834,20 @@ function App() {
       }
 
       // Build payload
-      let payload: any;
+      let payload:
+        | {
+            cron: string;
+            actions: ScheduleStep[];
+            description: string;
+            enabled: boolean;
+          }
+        | {
+            cron: string;
+            action: string;
+            action_params: Record<string, unknown>;
+            description: string;
+            enabled: boolean;
+          };
       if (Array.isArray(scheduleSequence) && scheduleSequence.length > 0) {
         payload = {
           cron: data.cron,
@@ -997,7 +902,7 @@ function App() {
       }
     };
 
-  const recordDeviceEvent = (device: Device, note: string) => {
+  function recordDeviceEvent(device: Device, note: string) {
     setDeviceHistory((prevHistory) => {
       const existing = prevHistory[device.id] || [];
       const now = new Date();
@@ -1215,9 +1120,10 @@ function App() {
         return;
       }
 
-      const data = await response.json();
-      const successCount = data.results.filter((item: any) => item.poweredOn).length;
-      setStatusMessage(`Poslano WOL svim uređajima. Uspješno upaljeno ${successCount} od ${data.results.length}.`);
+      const data = (await response.json()) as { results?: BulkPowerResult[] };
+      const results = data.results ?? [];
+      const successCount = results.filter((item) => item.poweredOn).length;
+      setStatusMessage(`Poslano WOL svim uređajima. Uspješno upaljeno ${successCount} od ${results.length}.`);
       setTimeout(() => setStatusMessage(""), 4000);
       await refreshAll();
     } catch (error) {
@@ -1230,6 +1136,7 @@ function App() {
     // Optimistic UI update: mark device as Off immediately
     const device = devices.find((d) => d.id === id);
     if (device) {
+      forcedOffIdsRef.current.add(id);
       applyOptimisticPowerOffState([id]);
       recordDeviceEvent({ ...device, powerState: "Off" }, "Manual power off requested");
       setStatusMessage("Zahtjev za gašenje poslan (status ažuriran lokalno).");
@@ -1243,6 +1150,7 @@ function App() {
       });
 
       if (!response.ok) {
+        forcedOffIdsRef.current.delete(id);
         const errorData = await response.json().catch(() => null);
         const errorMsg = errorData?.reason || errorData?.error || `Greška: ${response.statusText}`;
         showMessage("Greška pri gašenju", errorMsg);
@@ -1253,6 +1161,7 @@ function App() {
 
       const data = await response.json();
       if (!data.success) {
+        forcedOffIdsRef.current.delete(id);
         showMessage("Gašenje nije uspjelo", data.reason || "Nepoznata greška");
         await refreshAll();
         return;
@@ -1261,6 +1170,7 @@ function App() {
       // backend accepted the request; keep the optimistic UI state
       return;
     } catch (error) {
+      forcedOffIdsRef.current.delete(id);
       console.error("Greska pri gašenju uređaja:", error);
       showMessage("Greška", "Greška pri gašenju uređaja.");
       // On error, reload device states
@@ -1271,6 +1181,7 @@ function App() {
   const handlePowerOnDevice = async (id: number) => {
     showToast("info", "Uključivanje", "Šaljem WoL paket za paljenje TV-a...");
     // Optimistic UI update: mark device as On immediately
+    forcedOffIdsRef.current.delete(id);
     const device = devices.find((d) => d.id === id);
     if (device) {
       setDevices((prev) =>
@@ -1499,7 +1410,7 @@ function App() {
     setSelectedDiscoveredDevices(new Set());
   };
 
-  const handleSendDeviceAction = async (id: number, action: string, params: Record<string, any> = {}) => {
+  const handleSendDeviceAction = async (id: number, action: string, params: Record<string, unknown> = {}) => {
     if (!id || !action) return;
     try {
       const device = devices.find((d) => d.id === id);
@@ -1548,9 +1459,10 @@ function App() {
         return;
       }
 
-      const data = await response.json();
-      const successCount = data.results.filter((item: any) => item.poweredOff).length;
-      setStatusMessage(`Poslano gašenje svih uređaja. Ugašeno ${successCount} od ${data.results.length}.`);
+      const data = (await response.json()) as { results?: BulkPowerResult[] };
+      const results = data.results ?? [];
+      const successCount = results.filter((item) => item.poweredOff).length;
+      setStatusMessage(`Poslano gašenje svih uređaja. Ugašeno ${successCount} od ${results.length}.`);
       setTimeout(() => setStatusMessage(""), 4000);
     } catch (error) {
       console.error("Greska pri gašenju svih TV-a:", error);
@@ -1571,25 +1483,11 @@ function App() {
     }
   };
 
-  // View modal state
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [viewModalDevice, setViewModalDevice] = useState<Device | null>(null);
-
-  const closeViewModal = () => {
-    setShowViewModal(false);
-    setViewModalDevice(null);
-    setSelectedDeviceId(null);
-    setDetailTab("info");
-  };
-
-  // per-row dropdown was removed; actions are inline now
-
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowModal(false);
-        setShowViewModal(false);
         setShowDeleteConfirm(false);
         setShowAssignGroupModal(false);
         setMessageModal(null);
@@ -1611,24 +1509,11 @@ function App() {
     };
   }, []);
 
-  // Lock body scroll when modals are open
-  useEffect(() => {
-    const isAnyModalOpen = showModal || showViewModal || showDeleteConfirm || showAssignGroupModal || messageModal || showScheduleBuilder || showDiscoveryModal;
-    if (isAnyModalOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
-    return () => {
-      document.body.style.overflow = 'auto';
-    };
-  }, [showModal, showViewModal, showDeleteConfirm, showAssignGroupModal, messageModal, showScheduleBuilder, showDiscoveryModal]);
-
   // Auto-trigger discovery when modal opens
   useEffect(() => {
     if (showDiscoveryModal && !discoveryLoading && discoveredDevices.length === 0 && !discoveryInitiatedRef.current) {
       discoveryInitiatedRef.current = true;
-      handleStartDiscovery();
+      void handleStartDiscoveryRef.current();
     }
     
     // Reset the flag when modal closes
@@ -1640,10 +1525,8 @@ function App() {
   const handleViewDevice = async (id: number) => {
     const dev = devices.find((d) => d.id === id) || null;
     if (dev) {
-      setViewModalDevice(dev);
       setSelectedDeviceId(id);
       setDetailTab("schedule");
-      setShowViewModal(true);
     }
   };
 
@@ -1696,11 +1579,6 @@ function App() {
     });
 
     await refreshAll();
-    setShowAssignGroupModal(false);
-    setSelectedAssignGroupId(null);
-  };
-
-  const cancelAssignGroup = () => {
     setShowAssignGroupModal(false);
     setSelectedAssignGroupId(null);
   };
@@ -1761,7 +1639,7 @@ function App() {
       return;
     }
 
-    showToast("info", "Restart", `Šaljem naredbu za restart ${selectedIds.length} uređaj(a)...`);
+    showToast("info", "Restart", `Saljem naredbu za restart ${selectedIds.length} uredaj(a)...`);
 
     await fetch(`${baseUrl}/devices/restart`, {
       method: "POST",
@@ -1772,31 +1650,6 @@ function App() {
     });
 
     showToast("success", "Restart pokrenuto", `Restart pokrenut za ${selectedIds.length} uređaj(a). WebOS TV-i se gase i pale automatski za otprilike 15-30 sekundi.`);
-  };
-
-  // @ts-ignore - unused but may be needed for future use
-  const _handleApplySettings = async () => {
-    const selectedIds = devices
-      .filter((device) => device.selected)
-      .map((device) => device.id);
-
-    if (selectedIds.length === 0) {
-      showMessage("Greška", "Nema označenih uređaja.");
-      return;
-    }
-
-    await fetch(`${baseUrl}/devices/settings`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        ids: selectedIds,
-        settings: { mode: "professionally managed", updatedAt: new Date() },
-      }),
-    });
-
-    showMessage("Info", "Promjene poslane za oznacene uredaje.");
   };
 
   const handleCreateGroup = async () => {
@@ -1848,8 +1701,8 @@ function App() {
         return;
       }
 
-      const data = await response.json();
-      const count = data.results.filter((item: any) => item.poweredOn).length;
+      const data = (await response.json()) as { results?: Array<{ poweredOn?: boolean }> };
+      const count = (data.results ?? []).filter((item) => item.poweredOn).length;
       showMessage("Info", `Poslano paljenje grupe. Uspješno upaljeno ${count} uređaja.`);
       await refreshAll();
     } catch (error) {
@@ -1880,8 +1733,8 @@ function App() {
         return;
       }
 
-      const data = await response.json();
-      const successCount = data.results.filter((item: any) => item.poweredOff).length;
+      const data = (await response.json()) as { results?: Array<{ poweredOff?: boolean }> };
+      const successCount = (data.results ?? []).filter((item) => item.poweredOff).length;
       showMessage("Info", `Poslano gašenje grupe. Ugašeno ${successCount} uređaja.`);
     } catch (error) {
       console.error("Greška pri gašenju grupe:", error);
@@ -1909,6 +1762,14 @@ function App() {
     navigate('/audit');
     await loadAuditLogs("all", String(groupId));
   };
+
+  refreshAllRef.current = refreshAll;
+  loadDevicesRef.current = loadDevices;
+  loadHealthSummaryRef.current = loadHealthSummary;
+  loadBackupsRef.current = loadBackups;
+  loadDiagnosticsRef.current = loadDiagnostics;
+  loadDeviceSchedulesRef.current = loadDeviceSchedules;
+  handleStartDiscoveryRef.current = handleStartDiscovery;
 
   const filteredDevices = devices.filter((device) => {
     const matchesSearch =
@@ -1970,7 +1831,6 @@ function App() {
   const selectedDeviceHistory = selectedDevice
     ? deviceHistory[selectedDevice.id] || []
     : [];
-  const viewModalDeviceInfo = viewModalDevice || selectedDevice;
 
   const recentDeviceEvents = Object.entries(deviceHistory)
     .flatMap(([deviceId, entries]) =>
@@ -1993,1834 +1853,187 @@ function App() {
     };
   });
 
-  const unassignedCount = devices.filter((device) => device.groupId === null).length;
-  const groupHealth = groupStatusSummary
-    .map((group) => ({
-      ...group,
-      offlineRatio: group.deviceCount ? group.offlineCount / group.deviceCount : 0,
-    }))
-    .sort((a, b) => b.offlineRatio - a.offlineRatio)
-    .slice(0, 4);
-
-  const recentOfflineEvents = recentDeviceEvents.filter((entry) => entry.status === "Offline").length;
-  const dashboardInsights = [
-    `Najviše offline ima ${groupHealth[0]?.name || "nijedna grupa"} (${groupHealth[0]?.offlineCount || 0}).`,
-    `U mreži je ${unassignedCount} uređaja bez grupe.`,
-    `Posljednja 4 događaja: ${recentOfflineEvents} offline zapisa.`,
-  ];
-
-  const onlineCount = devices.filter((device) => device.status === "Online").length;
-  const offlineCount = devices.filter((device) => device.status === "Offline").length;
-  const poweredOnCount = devices.filter((device) => device.powerState === "On").length;
-  const selectedCount = devices.filter((device) => device.selected).length;
-
-  const healthScore = devices.length > 0 ? Math.round((onlineCount / devices.length) * 100) : 0;
-  const healthStatus = healthScore >= 80 ? "excellent" : healthScore >= 60 ? "good" : healthScore >= 40 ? "warning" : "critical";
-  const criticalOfflineDevices = devices.filter((device) => device.status === "Offline").slice(0, 3);
-  const hasCritical = offlineCount > 0;
+  const muiTheme = createAppTheme(theme);
+  const pageFallback = (
+    <Container maxWidth="sm" sx={{ py: 6 }}>
+      <Typography variant="body1" color="text.secondary">Učitavanje stranice...</Typography>
+    </Container>
+  );
 
   return (
-    <>
-      <AppBar position="fixed" color="default" elevation={3}>
-        <Toolbar>
-          <Typography variant="h6" component="div" style={{ flexGrow: 1 }}>
-            Herceg TV Control
-          </Typography>
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Tooltip title="Refresh">
-              <span>
-                <IconButton color="inherit" aria-label="refresh" onClick={refreshAll} disabled={loading}>
-                  <RefreshIcon />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Power On All TVs">
-              <span>
-                <Button color="inherit" startIcon={<PowerIcon />} onClick={handlePowerOnAll}>
-                  Upali sve
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip title="Power Off All TVs">
-              <span>
-                <Button color="inherit" startIcon={<PowerOffIcon />} onClick={handlePowerOffAll}>
-                  Isključi sve
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip title="Add Device">
-              <span>
-                <Button color="inherit" startIcon={<AddIcon />} onClick={handleOpenModal}>
-                  Dodaj
-                </Button>
-              </span>
-            </Tooltip>
-            <IconButton color="inherit" aria-label="toggle theme" onClick={toggleTheme}>
-              {theme === "light" ? <DarkModeIcon /> : <LightModeIcon />}
-            </IconButton>
-          </div>
-        </Toolbar>
-      </AppBar>
-
-      <div className={`app theme-${theme}`}>
-      <aside className="sidebar">
-        <h2>TV Upravljač</h2>
-        <div className="sidebar-menu">
-          <NavLink to="/" end className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>📊 Početna</NavLink>
-          <NavLink to="/devices" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>📺 Uređaji</NavLink>
-          <NavLink to="/groups" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>👥 Grupe</NavLink>
-          <NavLink to="/audit" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>📜 Audit log</NavLink>
-          <NavLink to="/settings" className={({isActive}: {isActive: boolean}) => isActive ? 'active' : ''}>⚙️ Postavke</NavLink>
-        </div>
-      </aside>
-
-      <main className="content">
-        <Routes>
-          <Route path="/" element={<PageSetter page="dashboard" />} />
-          <Route path="/devices" element={<PageSetter page="devices" />} />
-          <Route path="/groups" element={<PageSetter page="groups" />} />
-          <Route path="/audit" element={<PageSetter page="audit" />} />
-          <Route path="/settings" element={<PageSetter page="settings" />} />
-          <Route path="*" element={<PageSetter page="notfound" />} />
-        </Routes>
+    <ThemeProvider theme={muiTheme}>
+      <CssBaseline />
+      <AppLayout
+        theme={theme}
+        toggleTheme={toggleTheme}
+        loading={loading}
+        refreshAll={refreshAll}
+        handlePowerOnAll={handlePowerOnAll}
+        handlePowerOffAll={handlePowerOffAll}
+        handleOpenModal={handleOpenModal}
+        statusMessage={statusMessage}
+        lastRefresh={lastRefresh}
+      >
         {activePage === "dashboard" && (
-          <>
-            <h1>Početna</h1>
-            <Grid component="div" container spacing={2} className="stats">
-              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-                <Card className="stat-card stat-total">
-                  <CardContent>
-                    <div className="stat-card-top">
-                      <span className="stat-icon">📦</span>
-                      <span className="stat-title">Ukupno uređaja</span>
-                    </div>
-                    <div className="stat-number">{devices.length}</div>
-                    <div className="stat-meta">Sve jedinice</div>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-                <Card className="stat-card stat-online">
-                  <CardContent>
-                    <div className="stat-card-top">
-                      <span className="stat-icon">✅</span>
-                      <span className="stat-title">Na mreži</span>
-                    </div>
-                    <div className="stat-number">{onlineCount}</div>
-                    <div className="stat-meta">Aktivni uređaji</div>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-                <Card className="stat-card stat-offline">
-                  <CardContent>
-                    <div className="stat-card-top">
-                      <span className="stat-icon">⛔</span>
-                      <span className="stat-title">Van mreže</span>
-                    </div>
-                    <div className="stat-number">{offlineCount}</div>
-                    <div className="stat-meta">Nedostupni uređaji</div>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-                <Card className="stat-card stat-powered">
-                  <CardContent>
-                    <div className="stat-card-top">
-                      <span className="stat-icon">⚡</span>
-                      <span className="stat-title">Uključeno</span>
-                    </div>
-                    <div className="stat-number">{poweredOnCount}</div>
-                    <div className="stat-meta">Napajanje aktivno</div>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid component="div" size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
-                <Card className="stat-card stat-selected">
-                  <CardContent>
-                    <div className="stat-card-top">
-                      <span className="stat-icon">🎯</span>
-                      <span className="stat-title">Odabrano</span>
-                    </div>
-                    <div className="stat-number">{selectedCount}</div>
-                    <div className="stat-meta">Trenutno označeno</div>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-
-            {hasCritical && (
-              <Alert severity="error" className={`alarm-notification alarm-${healthStatus}`}>
-                <div className="alarm-header">
-                  <span className="alarm-icon">⚠️</span>
-                  <span className="alarm-title">UPOZORENJE - Kritični uređaji offline</span>
-                </div>
-                <div className="alarm-devices">
-                  {criticalOfflineDevices.map((device) => (
-                    <div key={device.id} className="alarm-device-item">
-                      <span className="alarm-dot"></span>
-                      <span>{device.name}</span>
-                      <span className="alarm-ip">({device.ip})</span>
-                    </div>
-                  ))}
-                </div>
-              </Alert>
-            )}
-
-            <div className="health-score-card">
-              <div className="health-header">
-                <h3>Zdravlje mreže</h3>
-                <div className={`health-badge health-${healthStatus}`}>
-                  {healthScore}%
-                </div>
-              </div>
-              <div className="health-bar">
-                <LinearProgress
-                  variant="determinate"
-                  value={healthScore}
-                  className="health-bar-fill"
-                  sx={{ height: 12, borderRadius: 6 }}
-                />
-              </div>
-              <p className="health-text">
-                {healthStatus === "excellent" && "Mreža je u odličnom stanju! Svi uređaji su dostupni."}
-                {healthStatus === "good" && "Mreža je u dobrom stanju. Većina uređaja je dostupna."}
-                {healthStatus === "warning" && "Mreža zahtjeva pažnju. Nekoliko uređaja je van mreže."}
-                {healthStatus === "critical" && "Mreža je u kritičnom stanju! Mnogi uređaji su van mreže."}
-              </p>
-            </div>
-
-            <div className="dashboard-charts">
-              <div className="chart-card">
-                <div className="chart-title">Uređaji na mreži</div>
-                <div className="chart-bar-container">
-                  <LinearProgress
-                    variant="determinate"
-                    value={devices.length ? (onlineCount / devices.length) * 100 : 0}
-                    className="chart-bar online"
-                    sx={{ height: 10, borderRadius: 5 }}
-                  />
-                </div>
-                <div className="chart-metrics">
-                  <span className="chart-value">{onlineCount}</span>
-                  <span className="chart-meta">od {devices.length} ukupno</span>
-                </div>
-              </div>
-              <div className="chart-card">
-                <div className="chart-title">Uređaji van mreže</div>
-                <div className="chart-bar-container">
-                  <LinearProgress
-                    variant="determinate"
-                    value={devices.length ? (offlineCount / devices.length) * 100 : 0}
-                    className="chart-bar offline"
-                    sx={{ height: 10, borderRadius: 5 }}
-                  />
-                </div>
-                <div className="chart-metrics">
-                  <span className="chart-value">{offlineCount}</span>
-                  <span className="chart-meta">od {devices.length} ukupno</span>
-                </div>
-              </div>
-            </div>
-
-            {devices.length > 0 && (
-              <div className="pie-chart-container">
-                <h2>Distribuacija statusa uređaja</h2>
-                <div className="pie-chart-donut-wrapper">
-                  <div
-                    className="pie-chart-donut"
-                    style={{
-                      background: `conic-gradient(#22c55e ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg, #f59e0b ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg 360deg)`,
-                    }}
-                  >
-                    <div className="donut-center">
-                      <div className="donut-count">{devices.length}</div>
-                      <div className="donut-label">uređaja</div>
-                    </div>
-                  </div>
-                  <div className="pie-legend">
-                    <div className="pie-legend-item">
-                      <span className="pie-legend-dot online"></span>
-                      <span>Na mreži ({onlineCount})</span>
-                    </div>
-                    <div className="pie-legend-item">
-                      <span className="pie-legend-dot offline"></span>
-                      <span>Van mreže ({offlineCount})</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {groupStatusSummary.length > 0 && (
-              <div className="circular-progress-container">
-                <h2>Zdravlje grupa po dostupnosti</h2>
-                <div className="circular-grid">
-                  {groupStatusSummary.slice(0, 4).map((group) => {
-                    const healthPercent = group.deviceCount ? (group.onlineCount / group.deviceCount) * 100 : 0;
-                    return (
-                      <div key={group.id} className="circular-progress-card">
-                        <div className="circular-progress-wrapper">
-                          <CircularProgress
-                            variant="determinate"
-                            value={healthPercent}
-                            size={100}
-                            thickness={8}
-                            sx={{
-                              color: healthPercent > 50 ? '#22c55e' : healthPercent > 20 ? '#f59e0b' : '#ef4444',
-                            }}
-                          />
-                          <div className="circular-progress-center">
-                            {Math.round(healthPercent)}%
-                          </div>
-                        </div>
-                        <div className="circular-progress-label">
-                          <strong>{group.name}</strong>
-                          <small>{group.onlineCount}/{group.deviceCount}</small>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            <div className="dashboard-grid">
-              <div className="dashboard-panel">
-                <h2>Grupe koje trebaju pažnju</h2>
-                <p className="form-description">
-                  Prati grupe prema udjelu offline uređaja i brzo vidi gdje treba intervenirati.
-                </p>
-                {groupHealth.length === 0 ? (
-                  <p className="empty-log">Nema dovoljno podataka za grupnu analizu.</p>
-                ) : (
-                  <List className="group-health-list">
-                    {groupHealth.map((group) => (
-                      <ListItem key={group.id} className="group-health-item">
-                        <ListItemText
-                          primary={
-                            <div className="group-health-title">
-                              <strong>{group.name}</strong>
-                              <span>{group.offlineCount}/{group.deviceCount} offline</span>
-                            </div>
-                          }
-                          secondary={
-                            <div className="group-health-bar-container">
-                              <div
-                                className="group-health-bar"
-                                style={{ width: `${group.deviceCount ? (group.offlineRatio * 100).toFixed(0) : 0}%` }}
-                              />
-                            </div>
-                          }
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                )}
-              </div>
-              <div className="dashboard-panel">
-                <h2>Operativni uvidi</h2>
-                <p className="form-description">
-                  Kratki pregled najvažnijih stanja i preporuka za akciju.
-                </p>
-                <List className="insight-list">
-                  {dashboardInsights.map((insight, index) => (
-                    <ListItem key={index} className="insight-list-item">
-                      <ListItemText primary={insight} />
-                    </ListItem>
-                  ))}
-                </List>
-              </div>
-            </div>
-          </>
-        )}
-
-        {activePage === "groups" && (
-          <>
-            <h1>Grupe uređaja</h1>
-            <p className="page-description">
-              Grupe služe za organizaciju TV uređaja u logične cjeline.
-              Dodaj uređaje u grupu kako bi mogao upravljati cijelom grupom odjednom,
-              primjerice restartati sve uređaje u toj grupi.
-            </p>
-            <div className="group-actions">
-              <TextField
-                className="small-input"
-                placeholder="Naziv nove grupe"
-                variant="outlined"
-                size="small"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-              />
-              <Button className="add-btn" onClick={handleCreateGroup}>
-                Kreiraj grupu
-              </Button>
-            </div>
-
-            <div className="group-list">
-              {groupStatusSummary.map((group) => (
-                <Card className="group-card" key={group.id}>
-                  <CardContent>
-                    <div className="group-card-title">{group.name}</div>
-                    <div>{group.deviceCount} uređaja</div>
-                    <div className="group-metrics">
-                      <span>Online: {group.onlineCount}</span>
-                      <span>Offline: {group.offlineCount}</span>
-                    </div>
-                  </CardContent>
-                  <CardActions className="group-card-actions">
-                    <Button
-                      className="action-btn restart-btn"
-                      onClick={() => handleRestartGroup(group.id)}
-                    >
-                      Restart grupe
-                    </Button>
-                    <Button
-                      className="action-btn poweron-btn"
-                      onClick={() => handlePowerOnGroup(group.id)}
-                    >
-                      Upali grupu
-                    </Button>
-                    <Button
-                      className="action-btn poweroff-btn"
-                      onClick={() => handlePowerOffGroup(group.id)}
-                    >
-                      Isključi grupu
-                    </Button>
-                    <Button
-                      className="action-btn"
-                      onClick={() => handleOpenAuditForGroup(group.id)}
-                    >
-                      Audit log
-                    </Button>
-                  </CardActions>
-                </Card>
-              ))}
-            </div>
-          </>
-        )}
-
-        {activePage === "audit" && (
-          <>
-            <h1>Audit log</h1>
-            <p className="page-description">
-              Pregled akcija po uređaju i grupi: ko je pokrenuo, kada je pokrenuto i kakav je ishod.
-            </p>
-
-            <div className="filters">
-              <FormControl size="small" className="small-select select-box" sx={{ minWidth: 220 }}>
-                <Select
-                  value={auditDeviceFilter}
-                  onChange={(e) => setAuditDeviceFilter(e.target.value)}
-                  displayEmpty
-                  inputProps={{
-                    name: "auditDeviceFilter",
-                    id: "audit-device-filter",
-                  }}
-                >
-                  <MenuItem value="all">Svi uređaji</MenuItem>
-                  {devices.map((device) => (
-                    <MenuItem key={device.id} value={String(device.id)}>
-                      {device.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" className="small-select select-box" sx={{ minWidth: 220 }}>
-                <Select
-                  value={auditGroupFilter}
-                  onChange={(e) => setAuditGroupFilter(e.target.value)}
-                  displayEmpty
-                  inputProps={{
-                    name: "auditGroupFilter",
-                    id: "audit-group-filter",
-                  }}
-                >
-                  <MenuItem value="all">Sve grupe</MenuItem>
-                  {groups.map((group) => (
-                    <MenuItem key={group.id} value={String(group.id)}>
-                      {group.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <button
-                type="button"
-                className="refresh-btn"
-                onClick={() => loadAuditLogs(auditDeviceFilter, auditGroupFilter)}
-                disabled={auditLoading}
-              >
-                {auditLoading ? "Učitavam..." : "Osvježi audit"}
-              </button>
-            </div>
-
-            <div className="table-wrapper">
-              <TableContainer component={Paper} className="device-table">
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Vrijeme</TableCell>
-                      <TableCell>Ko/Izvor</TableCell>
-                      <TableCell>Akcija</TableCell>
-                      <TableCell>Uređaj</TableCell>
-                      <TableCell>Grupa</TableCell>
-                      <TableCell>Ishod</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {auditLogs.length === 0 ? (
-                      <TableRow className="empty-row">
-                        <TableCell colSpan={6}>Nema audit zapisa za odabrani filter.</TableCell>
-                      </TableRow>
-                    ) : (
-                      auditLogs.map((entry) => {
-                        const deviceName = entry.device_id
-                          ? devices.find((d) => d.id === entry.device_id)?.name || `Uređaj ${entry.device_id}`
-                          : "-";
-                        const groupName = entry.group_id
-                          ? groups.find((g) => g.id === entry.group_id)?.name || `Grupa ${entry.group_id}`
-                          : "-";
-                        return (
-                          <TableRow key={entry.id}>
-                            <TableCell>{new Date(entry.created_at).toLocaleString()}</TableCell>
-                            <TableCell>{entry.source || "system"}</TableCell>
-                            <TableCell>{entry.action}</TableCell>
-                            <TableCell>{deviceName}</TableCell>
-                            <TableCell>{groupName}</TableCell>
-                            <TableCell>
-                              <span className={entry.status.includes("success") ? "status-online" : "status-offline"}>
-                                {entry.status}
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        );
-                    })
-                  )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </div>
-          </>
-        )}
-
-        {activePage === "settings" && (
-          <>
-            <h1>Postavke</h1>
-            <div className="table-wrapper">
-              <p>Backend URL:</p>
-              <TextField
-                className="small-input"
-                size="small"
-                variant="outlined"
-                value={backendUrl}
-                onChange={(e) => setBackendUrl(e.target.value)}
-              />
-              <br />
-              <br />
-              <p>Scheduler:</p>
-              <FormControl size="small" className="small-select" sx={{ minWidth: 180 }}>
-                <Select
-                  value={schedulerOn ? "on" : "off"}
-                  onChange={(e) => setSchedulerOn(e.target.value === "on")}
-                  inputProps={{
-                    name: "schedulerStatus",
-                    id: "scheduler-status",
-                  }}
-                >
-                  <MenuItem value="on">Uključen</MenuItem>
-                  <MenuItem value="off">Isključen</MenuItem>
-                </Select>
-              </FormControl>
-              <br />
-              <br />
-              <Button
-                className="save-btn"
-                onClick={() => showMessage("Info", "Postavke spremljene lokalno.")}
-              >
-                Spremi postavke
-              </Button>
-
-              <br />
-              <br />
-              <h3>Health pregled</h3>
-              <Button type="button" className="refresh-btn" onClick={loadHealthSummary} disabled={healthLoading}>
-                {healthLoading ? "Učitavam health..." : "Osvježi health"}
-              </Button>
-              {healthSummary ? (
-                <div>
-                  <p>Vrijeme: {new Date(healthSummary.timestamp).toLocaleString()}</p>
-                  <p>Uređaji online/offline: {healthSummary.devices.online} / {healthSummary.devices.offline}</p>
-                  <p>Schedule success 24h: {healthSummary.schedules24h.success}/{healthSummary.schedules24h.total} ({healthSummary.schedules24h.successRate ?? 0}%)</p>
-                  <p>Zadnjih grešaka: {healthSummary.recentFailures.length}</p>
-                </div>
-              ) : (
-                <p>Health podaci trenutno nisu dostupni.</p>
-              )}
-
-            {String(activePage) === "notfound" && (
-              <>
-                <h1>404 - Stranica nije pronađena</h1>
-                <p className="page-description">Stranica koju tražiš ne postoji.</p>
-              </>
-            )}
-
-              <br />
-              <h3>Backup i restore baze</h3>
-              <Button type="button" className="save-btn" onClick={handleCreateBackup} disabled={backupLoading}>
-                {backupLoading ? "Radim backup..." : "Napravi backup"}
-              </Button>
-              <Button type="button" className="refresh-btn" onClick={loadBackups} disabled={backupLoading} style={{ marginLeft: 8 }}>
-                Osvježi listu backupa
-              </Button>
-              <br />
-              <br />
-              <FormControl size="small" className="small-select" sx={{ minWidth: 240 }}>
-                <Select
-                  value={selectedBackup}
-                  onChange={(e) => setSelectedBackup(e.target.value)}
-                  disabled={backupLoading || backupList.length === 0}
-                  displayEmpty
-                  inputProps={{
-                    name: "backupSelection",
-                    id: "backup-selection",
-                  }}
-                >
-                  {backupList.length === 0 ? (
-                    <MenuItem value="">Nema backup fajlova</MenuItem>
-                  ) : (
-                    backupList.map((backup) => (
-                      <MenuItem key={backup.name} value={backup.name}>
-                        {backup.name} ({Math.round(backup.sizeBytes / 1024)} KB)
-                      </MenuItem>
-                    ))
-                  )}
-                </Select>
-              </FormControl>
-              <br />
-              <br />
-              <Button
-                className="action-btn poweroff-btn"
-                onClick={handleRestoreBackup}
-                disabled={backupLoading || !selectedBackup}
-              >
-                {backupLoading ? "Restore u toku..." : "Restore odabranog backupa"}
-              </Button>
-
-              <br />
-              <br />
-              <h3>Automatsko održavanje i brza dijagnostika</h3>
-              <p>
-                Sedmični maintenance se izvršava automatski na backendu. Ovdje možeš ručno pokrenuti maintenance i otvoriti
-                dijagnostički snapshot kad se desi greška.
-              </p>
-              <Button
-                className="action-btn poweron-btn"
-                onClick={handleRunMaintenanceNow}
-                disabled={diagnosticsLoading}
-              >
-                {diagnosticsLoading ? "Maintenance radi..." : "Pokreni maintenance sada"}
-              </Button>
-              <Button
-                className="refresh-btn"
-                onClick={loadDiagnostics}
-                disabled={diagnosticsLoading}
-                style={{ marginLeft: 8 }}
-              >
-                Osvježi diagnostics
-              </Button>
-              <Button
-                className="save-btn"
-                onClick={handleShowDiagnosticsSnapshot}
-                disabled={!diagnostics}
-                style={{ marginLeft: 8 }}
-              >
-                Prikaži diagnostics snapshot
-              </Button>
-              <Button
-                className="save-btn"
-                onClick={handleDownloadDiagnosticsSnapshot}
-                disabled={!diagnostics}
-                style={{ marginLeft: 8 }}
-              >
-                Preuzmi diagnostics JSON
-              </Button>
-
-              {diagnostics ? (
-                <div style={{ marginTop: 12 }}>
-                  {diagnostics.runtimeIssues.length >= (diagnostics.config.runtimeIssueAlertThreshold ?? 8) && (
-                    <Alert severity="warning" className="diagnostics-alert-box" sx={{ mb: 2 }}>
-                      ⚠️ Upozorenje: runtime issue count je {diagnostics.runtimeIssues.length}, što prelazi prag {diagnostics.config.runtimeIssueAlertThreshold ?? 8}.
-                    </Alert>
-                  )}
-                  <p><strong>Zadnji maintenance:</strong> {diagnostics.lastMaintenance?.timestamp ? new Date(diagnostics.lastMaintenance.timestamp).toLocaleString() : "nema"}</p>
-                  <p><strong>Trigger:</strong> {diagnostics.lastMaintenance?.trigger || "-"}</p>
-                  <p><strong>Status:</strong> {diagnostics.lastMaintenance?.status || "-"}</p>
-                  <p><strong>Runtime issue zapisa:</strong> {diagnostics.runtimeIssues.length}</p>
-                  <p><strong>Recent failed audit:</strong> {diagnostics.recentFailedAudit.length}</p>
-                  <p><strong>Sedmični cron:</strong> {diagnostics.config.weeklyMaintenanceCron}</p>
-                </div>
-              ) : (
-                <p style={{ marginTop: 12 }}>Diagnostics nisu dostupni.</p>
-              )}
-            </div>
-          </>
-        )}
-
-        {activePage === "devices" && (
-          <>
-            <div className="top-bar">
-              <div>
-                <h1 style={{ color: "green" }}>Uređaji</h1>
-                <p className="page-description">
-                  Pronađi uređaje brzo, upravljaj grupama i primjeni postavke u nekoliko klikova.
-                </p>
-                <p className="last-refresh">Zadnje osvježenje: {lastRefresh || "još nije osvježeno"}</p>
-              </div>
-              {/* Controls moved to global AppBar */}
-            </div>
-
-
-            {showDeleteConfirm && (
-              <Dialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} slotProps={{ paper: { className: 'modal' } }}>
-                <DialogTitle>Potvrda brisanja</DialogTitle>
-                <DialogContent>
-                  <p>Da li želiš obrisati odabrani uređaj?</p>
-                </DialogContent>
-                <DialogActions sx={{ gap: 1, padding: 2 }}>
-                  <Button className="action-btn" onClick={cancelDelete}>
-                    Ne, poništi
-                  </Button>
-                  <Button className="save-btn" onClick={confirmDelete}>
-                    Da, obriši
-                  </Button>
-                </DialogActions>
-              </Dialog>
-            )}
-            {showAssignGroupModal && (
-              <Dialog open={showAssignGroupModal} onClose={() => setShowAssignGroupModal(false)} slotProps={{ paper: { className: 'modal' } }}>
-                <DialogTitle>Dodaj u grupu</DialogTitle>
-                <DialogContent>
-                  <p>Izaberi grupu za označene uređaje:</p>
-                  <FormControl size="small" sx={{ minWidth: 260, marginTop: 1 }}>
-                    <Select
-                      value={selectedAssignGroupId ?? ""}
-                      onChange={(e) =>
-                        setSelectedAssignGroupId(
-                          e.target.value ? Number(e.target.value) : null
-                        )
-                      }
-                      displayEmpty
-                      inputProps={{ name: 'assignGroup', id: 'assign-group-select' }}
-                    >
-                      <MenuItem value="">Odaberi grupu</MenuItem>
-                      {groups.map((group) => (
-                        <MenuItem key={group.id} value={group.id}>
-                          {group.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </DialogContent>
-                <DialogActions sx={{ gap: 1, padding: 2 }}>
-                  <Button className="action-btn" onClick={cancelAssignGroup}>
-                    Otkaži
-                  </Button>
-                  <Button className="save-btn" onClick={assignGroupToSelected}>
-                    Dodaj u grupu
-                  </Button>
-                </DialogActions>
-              </Dialog>
-            )}
-
-            {messageModal && (
-              <Dialog open={!!messageModal} onClose={() => setMessageModal(null)} slotProps={{ paper: { className: 'modal' } }}>
-                <DialogTitle>{messageModal.title}</DialogTitle>
-                <DialogContent>
-                  {messageModal.title.toLowerCase().includes("log") ? (
-                    <pre className="log-message-content">{messageModal.message}</pre>
-                  ) : (
-                    <p>{messageModal.message}</p>
-                  )}
-                </DialogContent>
-                <DialogActions sx={{ gap: 1, padding: 2 }}>
-                  {messageModal.onConfirm ? (
-                    <>
-                      <Button className="action-btn" onClick={closeMessageModal}>
-                        {messageModal.cancelText || "Odustani"}
-                      </Button>
-                      <Button className="save-btn" onClick={handleMessageConfirm}>
-                        {messageModal.confirmText || "Potvrdi"}
-                      </Button>
-                    </>
-                  ) : (
-                    <Button className="save-btn" onClick={closeMessageModal}>
-                      U redu
-                    </Button>
-                  )}
-                </DialogActions>
-              </Dialog>
-            )}
-
-            <div className="stats">
-              <div className="stat-card stat-total">
-                <div className="stat-card-top">
-                  <span className="stat-icon">📦</span>
-                  <span className="stat-title">Ukupno uređaja</span>
-                </div>
-                <div className="stat-number">{devices.length}</div>
-                <div className="stat-meta">Sve jedinice</div>
-              </div>
-              <div className="stat-card stat-online">
-                <div className="stat-card-top">
-                  <span className="stat-icon">✅</span>
-                  <span className="stat-title">Na mreži</span>
-                </div>
-                <div className="stat-number">{onlineCount}</div>
-                <div className="stat-meta">Aktivni uređaji</div>
-              </div>
-              <div className="stat-card stat-offline">
-                <div className="stat-card-top">
-                  <span className="stat-icon">⛔</span>
-                  <span className="stat-title">Van mreže</span>
-                </div>
-                <div className="stat-number">{offlineCount}</div>
-                <div className="stat-meta">Nedostupni uređaji</div>
-              </div>
-              <div className="stat-card stat-powered">
-                <div className="stat-card-top">
-                  <span className="stat-icon">⚡</span>
-                  <span className="stat-title">Uključeno</span>
-                </div>
-                <div className="stat-number">{poweredOnCount}</div>
-                <div className="stat-meta">Napajanje aktivno</div>
-              </div>
-              <div className="stat-card stat-selected">
-                <div className="stat-card-top">
-                  <span className="stat-icon">🎯</span>
-                  <span className="stat-title">Odabrano</span>
-                </div>
-                <div className="stat-number">{selectedCount}</div>
-                <div className="stat-meta">Trenutno označeno</div>
-              </div>
-            </div>
-
-            <div className="activity-feed-card">
-              <h2>Aktivnosti uređaja</h2>
-              <p className="form-description">
-                Prati posljednjih 4 automatskih i manuelnih događaja za uređaje.
-              </p>
-              {recentDeviceEvents.length === 0 ? (
-                <p className="empty-log">Nema zabilježenih aktivnosti još.</p>
-              ) : (
-                <List className="activity-log">
-                  {recentDeviceEvents.map((entry, index) => (
-                    <ListItem key={`${entry.deviceId}-${entry.time}-${index}`}>
-                      <ListItemText
-                        primary={`${entry.timestamp} - ${entry.deviceName} - ${entry.status}`}
-                        secondary={entry.note}
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              )}
-            </div>
-
-            <TextField
-              id="device-search"
-              name="deviceSearch"
-              variant="outlined"
-              size="small"
-              className="search-box"
-              placeholder="Pretraži uređaj..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              sx={{ '& .MuiInputBase-root': { height: 42 } }}
+          <Suspense fallback={pageFallback}>
+            <DashboardPage
+              devices={devices}
+              groupStatusSummary={groupStatusSummary}
+              recentDeviceEvents={recentDeviceEvents}
             />
-
-            <div className="filters">
-              <FormControl size="small" sx={{ minWidth: 180 }}>
-                <Select
-                  value={groupFilter ?? ""}
-                  onChange={(e) =>
-                    setGroupFilter(e.target.value ? Number(e.target.value) : null)
-                  }
-                  inputProps={{
-                    name: "filterGroup",
-                    id: "filter-group",
-                  }}
-                  className="small-select select-box"
-                >
-                  <MenuItem value="">Sve grupe</MenuItem>
-                  <MenuItem value="-1">Bez grupe</MenuItem>
-                  {groups.map((group) => (
-                    <MenuItem key={group.id} value={group.id}>
-                      {group.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  inputProps={{
-                    name: "filterStatus",
-                    id: "filter-status",
-                  }}
-                  className="small-select select-box"
-                >
-                  <MenuItem value="all">Sve statuse</MenuItem>
-                  <MenuItem value="online">Samo online</MenuItem>
-                  <MenuItem value="offline">Samo offline</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 160 }}>
-                <Select
-                  value={powerFilter}
-                  onChange={(e) => setPowerFilter(e.target.value)}
-                  inputProps={{
-                    name: "filterPower",
-                    id: "filter-power",
-                  }}
-                  className="small-select select-box"
-                >
-                  <MenuItem value="all">Sve napajanja</MenuItem>
-                  <MenuItem value="on">Samo upaljeni</MenuItem>
-                  <MenuItem value="off">Samo ugašeni</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl size="small" sx={{ minWidth: 180 }}>
-                <Select
-                  value={activityFilter}
-                  onChange={(e) => setActivityFilter(e.target.value)}
-                  inputProps={{
-                    name: "filterActivity",
-                    id: "filter-activity",
-                  }}
-                  className="small-select select-box"
-                >
-                  <MenuItem value="all">Sve aktivnosti</MenuItem>
-                  <MenuItem value="active24h">Aktivni 24h</MenuItem>
-                  <MenuItem value="active7d">Aktivni 7d</MenuItem>
-                  <MenuItem value="inactive7d">Neaktivni &gt; 7d</MenuItem>
-                  <MenuItem value="inactive30d">Neaktivni &gt; 30d</MenuItem>
-                </Select>
-              </FormControl>
-              <TextField
-                id="filter-registered-from"
-                name="filterRegisteredFrom"
-                type="date"
-                size="small"
-                className="small-input"
-                value={registrationFrom}
-                onChange={(e) => setRegistrationFrom(e.target.value)}
-                title="Registrirano od"
-                slotProps={{
-                  input: {
-                    sx: { padding: '10px 12px' },
-                  },
-                }}
-                sx={{ width: 180 }}
-              />
-              <TextField
-                id="filter-registered-to"
-                name="filterRegisteredTo"
-                type="date"
-                size="small"
-                className="small-input"
-                value={registrationTo}
-                onChange={(e) => setRegistrationTo(e.target.value)}
-                title="Registrirano do"
-                slotProps={{
-                  input: {
-                    sx: { padding: '10px 12px' },
-                  },
-                }}
-                sx={{ width: 180 }}
-              />
-              {selectedDevice && (
-                <Button type="button" className="action-btn" onClick={handleClearSelection}>
-                  Zatvori detalje
-                </Button>
-              )}
-            </div>
-
-            <div className="actions">
-              <Button className="action-btn restart-btn" onClick={handleRestartSelected}>
-                <span className="button-icon">🔄</span> Restart označenih
-              </Button>
-              <Button className="action-btn delete-selected-btn" onClick={handleDeleteSelected}>
-                <span className="button-icon">🗑️</span> Obriši odabrane
-              </Button>
-              <Button className="action-btn assign-btn" onClick={openAssignGroupModal}>
-                <span className="button-icon">👥</span> Dodaj u grupu
-              </Button>
-            </div>
-
-            <div className="table-wrapper">
-              {loading ? (
-                <div className="loading-skeleton-container">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="skeleton-row">
-                      <div className="skeleton-cell" style={{width: '40px'}}></div>
-                      <div className="skeleton-cell" style={{width: '15%'}}></div>
-                      <div className="skeleton-cell" style={{width: '10%'}}></div>
-                      <div className="skeleton-cell" style={{width: '12%'}}></div>
-                      <div className="skeleton-cell" style={{width: '15%'}}></div>
-                      <div className="skeleton-cell" style={{width: '10%'}}></div>
-                      <div className="skeleton-cell" style={{width: '10%'}}></div>
-                      <div className="skeleton-cell" style={{width: '10%'}}></div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-              <table className="device-table">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Naziv</th>
-                    <th>Marka</th>
-                    <th>IP Adresa</th>
-                    <th>MAC Adresa</th>
-                    <th>Grupa</th>
-                    <th>Registracija</th>
-                    <th>Aktivnost</th>
-                    <th>Napajanje</th>
-                    <th>Status</th>
-                    <th>Akcije</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredDevices.length === 0 ? (
-                    <tr className="empty-row">
-                      <td colSpan={11}>
-                        Nema uređaja za prikaz. Dodaj novi uređaj ili očisti pretragu.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredDevices.map((device) => (
-                      <tr key={device.id}>
-                        <td>
-                          <Checkbox
-                            size="small"
-                            checked={device.selected}
-                            onChange={() => toggleDevice(device.id)}
-                            sx={{ padding: '6px' }}
-                          />
-                        </td>
-                        <td>{device.name}</td>
-                        <td>{device.brand || "generic"}</td>
-                        <td>{device.ip}</td>
-                        <td>{device.mac}</td>
-                        <td>{device.groupName || "-"}</td>
-                        <td>{device.created_at ? new Date(device.created_at).toLocaleDateString() : "-"}</td>
-                        <td>{device.last_active_at ? new Date(device.last_active_at).toLocaleDateString() : "-"}</td>
-                        <td>
-                          <span
-                            className={
-                              device.powerState === "On"
-                                ? "status-online"
-                                : "status-offline"
-                            }
-                          >
-                            {device.powerState === "On" ? "💡" : "⛔"} {formatPowerText(device.powerState)}
-                          </span>
-                        </td>
-                        <td>
-                          <span
-                            className={
-                              device.status === "Online"
-                                ? "status-online"
-                                : "status-offline"
-                            }
-                          >
-                            {device.status === "Online" ? "🟢" : "🔴"} {formatStatusText(device.status)}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
-                            <Tooltip title="Pogledaj">
-                              <IconButton size="small" sx={{ color: '#38bdf8', '&:hover': { backgroundColor: 'rgba(56, 189, 248, 0.16)' } }} onClick={() => handleViewDevice(device.id)}>
-                                <VisibilityIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Uredi">
-                              <IconButton size="small" sx={{ color: '#f59e0b', '&:hover': { backgroundColor: 'rgba(245, 158, 11, 0.16)' } }} onClick={() => {
-                                setEditingId(device.id);
-                                setDeviceName(device.name);
-                                setDeviceIp(device.ip);
-                                setDeviceMac(device.mac);
-                                setModalGroupId(device.groupId ?? null);
-                                setShowModal(true);
-                              }}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Audit log">
-                              <IconButton size="small" sx={{ color: '#64748b', '&:hover': { backgroundColor: 'rgba(100, 116, 139, 0.16)' } }} onClick={() => handleOpenAuditForDevice(device.id)}>
-                                <ArticleIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Restart">
-                              <IconButton size="small" sx={{ color: '#10b981', '&:hover': { backgroundColor: 'rgba(16, 185, 129, 0.16)' } }} onClick={() => handleRestartDevice(device.id)}>
-                                <RestartAltIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Obriši">
-                              <IconButton size="small" sx={{ color: '#ef4444', '&:hover': { backgroundColor: 'rgba(239, 68, 68, 0.16)' } }} onClick={() => { setPendingDelete(device.id); setShowDeleteConfirm(true); }}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-              )}
-            </div>
-            {selectedDevice && !showViewModal && (
-              <div className="device-details-card">
-                <h2>Detalji uređaja</h2>
-                <p className="form-description">
-                  Brzi pregled statusa, grupe i zapisa posljednjih automatskih provjera.
-                </p>
-                <div className="detail-row">
-                  <span>Naziv:</span>
-                  <strong>{selectedDevice.name}</strong>
-                </div>
-                <div className="detail-row">
-                  <span>IP adresa:</span>
-                  <strong>{selectedDevice.ip}</strong>
-                </div>
-                <div className="detail-row">
-                  <span>MAC adresa:</span>
-                  <strong>{selectedDevice.mac}</strong>
-                </div>
-                <div className="detail-row">
-                  <span>Grupa:</span>
-                  <strong>{selectedDevice.groupName || "Bez grupe"}</strong>
-                </div>
-                <div className="detail-row">
-                  <span>Napajanje:</span>
-                  <strong>{formatPowerText(selectedDevice.powerState)}</strong>
-                </div>
-                <div className="detail-row">
-                  <span>Status:</span>
-                  <strong>{formatStatusText(selectedDevice.status)}</strong>
-                </div>
-                <div className="detail-actions">
-                  <Button
-                    className="action-btn poweron-btn"
-                    onClick={() => handlePowerOnDevice(selectedDevice.id)}
-                  >
-                    Uključi uređaj
-                  </Button>
-                  <Button
-                    className="action-btn poweroff-btn"
-                    onClick={() => handlePowerOffDevice(selectedDevice.id)}
-                  >
-                    Isključi uređaj
-                  </Button>
-                  <Button
-                    className="action-btn restart-btn"
-                    onClick={() => handleRestartDevice(selectedDevice.id)}
-                  >
-                    Restart uređaja
-                  </Button>
-                  {(["webos", "samsung"].includes(selectedDevice.brand?.toLowerCase() || "")) && (
-                    <>
-                      <Button
-                        className="action-btn"
-                        onClick={() => handleSendDeviceAction(selectedDevice.id, "mute")}
-                      >
-                        🔇 Mute
-                      </Button>
-                      <Button
-                        className="action-btn"
-                        onClick={() => handleSendDeviceAction(selectedDevice.id, "unmute")}
-                      >
-                        🔊 Unmute
-                      </Button>
-                      <Button
-                        className="action-btn"
-                        onClick={() => handleSendDeviceAction(selectedDevice.id, "volumeUp")}
-                      >
-                        🔼 Vol+
-                      </Button>
-                      <Button
-                        className="action-btn"
-                        onClick={() => handleSendDeviceAction(selectedDevice.id, "volumeDown")}
-                      >
-                        🔽 Vol-
-                      </Button>
-                      <div className="volume-set-row">
-                        <TextField
-                          type="number"
-                          size="small"
-                          variant="outlined"
-                          value={volumeValue}
-                          onChange={(e) => setVolumeValue(e.target.value)}
-                          placeholder="0-100"
-                          className="small-input"
-                        />
-                        <Button
-                          className="action-btn"
-                          disabled={
-                            volumeValue.trim() === "" ||
-                            Number.isNaN(Number(volumeValue)) ||
-                            Number(volumeValue) < 0 ||
-                            Number(volumeValue) > 100
-                          }
-                          onClick={() => {
-                            const volume = Number(volumeValue);
-                            if (!Number.isNaN(volume) && volume >= 0 && volume <= 100) {
-                              handleSendDeviceAction(selectedDevice.id, "setVolume", { volume });
-                            }
-                          }}
-                        >
-                          🎚️ Postavi volumen
-                        </Button>
-                      </div>
-                      <div className="launch-app-row">
-                        <TextField
-                          size="small"
-                          variant="outlined"
-                          value={launchTarget}
-                          onChange={(e) => setLaunchTarget(e.target.value)}
-                          placeholder="App ID ili URL"
-                          className="small-input"
-                        />
-                        <Button
-                          className="action-btn"
-                          disabled={!launchTarget.trim()}
-                          onClick={() => {
-                            if (launchTarget.trim()) {
-                              handleSendDeviceAction(selectedDevice.id, "launchApp", { target: launchTarget.trim() });
-                            }
-                          }}
-                        >
-                          🚀 Otvori aplikaciju
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-                <div className="detail-tabs">
-                  <Button
-                    className={detailTab === "info" ? "tab-btn active" : "tab-btn"}
-                    onClick={() => setDetailTab("info")}
-                  >
-                    Informacije
-                  </Button>
-                  <Button
-                    className={detailTab === "schedule" ? "tab-btn active" : "tab-btn"}
-                    onClick={() => setDetailTab("schedule")}
-                  >
-                    Raspored
-                  </Button>
-                </div>
-                {detailTab === "info" ? (
-                  <div className="history-section">
-                    <h3>Posljednji zapisi</h3>
-                    <ul>
-                      {selectedDeviceHistory.length === 0 ? (
-                        <li>Nema zapisa za ovaj uređaj.</li>
-                      ) : (
-                        selectedDeviceHistory.map((entry, index) => (
-                          <li key={`${selectedDevice.id}-${index}`}>
-                            <strong>{entry.timestamp}</strong> - {entry.status} - {entry.note}
-                          </li>
-                        ))
-                      )}
-                    </ul>
-                  </div>
-                ) : (
-                  <div className="schedule-panel">
-                    <h3>Raspored za {selectedDevice.name}</h3>
-                    <p className="form-description">
-                      Dodaj cron stil rasporede za uključivanje, gašenje, otvaranje aplikacije ili mutiranje zvuka.
-                    </p>
-                    <div className="schedule-list">
-                      {getDeviceSchedules(selectedDevice.id).length === 0 ? (
-                        <div className="empty-log">Nema spremljenih rasporeda.</div>
-                      ) : (
-                        <div className="schedule-table">
-                          {getDeviceSchedules(selectedDevice.id).map((schedule) => (
-                            <div key={schedule.id} className="schedule-row">
-                              <div>
-                                <strong>{schedule.cron}</strong>
-                                <div>{getActionLabel(schedule.action)}</div>
-                                {schedule.description && <div className="schedule-note">{schedule.description}</div>}
-                              </div>
-                              <div className="schedule-row-actions">
-                                <button
-                                  type="button"
-                                  className={schedule.enabled ? "action-btn poweron-btn" : "action-btn"}
-                                  onClick={() => handleToggleSchedule(schedule)}
-                                >
-                                  {schedule.enabled ? "On" : "Off"}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="action-btn"
-                                  onClick={() => fetchScheduleLogs(schedule)}
-                                >
-                                  Logovi
-                                </button>
-                                <button
-                                  type="button"
-                                  className="action-btn"
-                                  onClick={() => handleTriggerSchedule(schedule)}
-                                >
-                                  Pokreni
-                                </button>
-                                <button
-                                  type="button"
-                                  className="action-btn settings-btn"
-                                  onClick={() => handleEditSchedule(schedule)}
-                                >
-                                  Uredi
-                                </button>
-                                <button
-                                  type="button"
-                                  className="action-btn delete-selected-btn"
-                                  onClick={() => handleDeleteSchedule(schedule.id)}
-                                >
-                                  Obriši
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="schedule-form">
-                      <h3>{editingScheduleId ? "Uredi raspored" : "Dodaj novi raspored"}</h3>
-                      <button 
-                        type="button" 
-                        className="action-btn"
-                        style={{marginBottom: 16}}
-                        onClick={() => setShowScheduleBuilder(true)}
-                      >
-                        📅 Koristi vizualni raspored
-                      </button>
-                      <label>Cron izraz</label>
-                        <TextField
-                          size="small"
-                          variant="outlined"
-                          value={scheduleCron}
-                          onChange={(e) => setScheduleCron(e.target.value)}
-                          placeholder="npr. 0 7 * * * ili 07:00"
-                          fullWidth
-                          className="small-input"
-                          margin="dense"
-                        />
-                        <div style={{display: 'flex', gap: 10, alignItems: 'center', marginTop: 8}}>
-                          <FormControlLabel
-                            control={
-                              <Checkbox
-                                size="small"
-                                checked={scheduleUseTime}
-                                onChange={(e) => setScheduleUseTime(e.target.checked)}
-                              />
-                            }
-                            label="Koristi vrijeme (HH:MM)"
-                          />
-                          {scheduleUseTime && (
-                            <TextField
-                              type="time"
-                              size="small"
-                              variant="outlined"
-                              value={scheduleTime}
-                              onChange={(e) => setScheduleTime(e.target.value)}
-                              className="small-input"
-                              sx={{ minWidth: 150 }}
-                            />
-                          )}
-                        </div>
-                        {scheduleUseTime && (
-                          <div className="form-description">Vrijeme će biti automatski pretvoreno u cron stil (svakodnevno).</div>
-                        )}
-                      <div className="schedule-help">
-                        Unesi cron izraz s 5 polja ili jednostavno vrijeme u formatu <strong>HH:MM</strong> za svakodnevni raspored. Možeš također odabrati "Koristi vrijeme (HH:MM)" kako bi unos bio prijateljskiji — to će se automatski pretvoriti u cron.
-                      </div>
-                      {!cronValid && (
-                        <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja ili vrijeme HH:MM poput 07:00.</div>
-                      )}
-                      <label>Akcija</label>
-                      <FormControl size="small" className="small-select" sx={{ minWidth: 220 }}>
-                        <Select
-                          value={scheduleAction}
-                          onChange={(e) => setScheduleAction(e.target.value)}
-                          inputProps={{
-                            name: 'scheduleAction',
-                            id: 'schedule-action-select',
-                          }}
-                        >
-                          {getAvailableActions(selectedDevice).map((action) => (
-                            <MenuItem key={action.value} value={action.value}>
-                              {action.label}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      {selectedDevice && (
-                        <div className="form-description">
-                          Automatski otkrivene podržane akcije za {selectedDevice.brand}:
-                          {getAvailableActions(selectedDevice)
-                            .map((action) => action.label)
-                            .join(", ")}
-                        </div>
-                      )}
-                      {(scheduleAction === "launchApp" || scheduleAction === "setVolume") && (
-                        <TextField
-                          size="small"
-                          variant="outlined"
-                          value={scheduleTarget}
-                          onChange={(e) => setScheduleTarget(e.target.value)}
-                          placeholder={
-                            scheduleAction === "launchApp"
-                              ? "App ID ili URL za otvaranje"
-                              : "Volumen 0-100"
-                          }
-                          className="small-input"
-                          fullWidth
-                        />
-                      )}
-
-                      <div className="sequence-editor">
-                        <h4>Sekvenca akcija (opcionalno)</h4>
-                        <div className="sequence-add-row">
-                          <FormControl size="small" sx={{ minWidth: 180 }}>
-                            <Select
-                              value={currentStepAction}
-                              onChange={(e) => setCurrentStepAction(e.target.value)}
-                              inputProps={{
-                                name: 'currentStepAction',
-                                id: 'current-step-action-select',
-                              }}
-                            >
-                              {getAvailableActions(selectedDevice).map((action) => (
-                                <MenuItem key={action.value} value={action.value}>
-                                  {action.label}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                          {(currentStepAction === "launchApp" || currentStepAction === "setVolume") && (
-                            <TextField
-                              size="small"
-                              variant="outlined"
-                              value={currentStepParam}
-                              onChange={(e) => setCurrentStepParam(e.target.value)}
-                              placeholder={currentStepAction === "launchApp" ? "App ID ili URL" : "Volumen 0-100"}
-                              className="small-input"
-                            />
-                          )}
-                          <TextField
-                            size="small"
-                            variant="outlined"
-                            value={currentStepDelay}
-                            onChange={(e) => setCurrentStepDelay(e.target.value)}
-                            placeholder="delay ms (npr. 5000)"
-                            className="small-input"
-                          />
-                          {currentStepAction === "poweron" && (
-                            <>
-                              <TextField
-                                size="small"
-                                variant="outlined"
-                                value={currentStepWaitForReady}
-                                onChange={(e) => setCurrentStepWaitForReady(e.target.value)}
-                                placeholder="waitForReadyMs (ms, default 30000)"
-                                className="small-input"
-                              />
-                              <TextField
-                                size="small"
-                                variant="outlined"
-                                value={currentStepSettle}
-                                onChange={(e) => setCurrentStepSettle(e.target.value)}
-                                placeholder="settleMs (ms, npr. 2000)"
-                                className="small-input"
-                              />
-                            </>
-                          )}
-                          <Button className="action-btn" onClick={addStepToSequence}>Dodaj u sekvencu</Button>
-                        </div>
-
-                        {scheduleSequence.length > 0 && (
-                          <div className="sequence-list">
-                            {scheduleSequence.map((step, idx) => (
-                              <div
-                                key={idx}
-                                className={`sequence-step ${dragIndex === idx ? 'dragging' : ''}`}
-                                draggable
-                                onDragStart={(e) => onDragStart(e, idx)}
-                                onDragOver={(e) => onDragOver(e)}
-                                onDrop={(e) => onDrop(e, idx)}
-                              >
-                                <div>
-                                  <strong>{getActionLabel(step.action)}</strong>
-                                  {step.params?.target && <div className="muted">{step.params.target}</div>}
-                                  {typeof step.params?.volume === 'number' && <div className="muted">Volumen: {step.params.volume}</div>}
-                                  {step.delayMs && <div className="muted">Delay: {step.delayMs} ms</div>}
-                                  {step.waitForReadyMs && <div className="muted">WaitReady: {step.waitForReadyMs} ms</div>}
-                                  {step.settleMs && <div className="muted">Settle: {step.settleMs} ms</div>}
-                                </div>
-                                <div className="sequence-step-actions">
-                                  <Button onClick={() => removeStep(idx)}>✕</Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <label>Opis</label>
-                      <TextField
-                        size="small"
-                        variant="outlined"
-                        value={scheduleDescription}
-                        onChange={(e) => setScheduleDescription(e.target.value)}
-                        placeholder="Opis rasporeda"
-                        className="small-input"
-                        fullWidth
-                      />
-                      <div className="schedule-form-row">
-                        <FormControlLabel
-                          className="schedule-enable-label"
-                          control={
-                            <Checkbox
-                              size="small"
-                              checked={scheduleEnabled}
-                              onChange={(e) => setScheduleEnabled(e.target.checked)}
-                            />
-                          }
-                          label="Omogući raspored"
-                        />
-                        <div className="schedule-buttons">
-                          <Button
-                            className="save-btn"
-                            onClick={handleSaveSchedule}
-                            disabled={
-                              !cronValid ||
-                              (scheduleAction === "launchApp" && !scheduleTarget.trim()) ||
-                              (scheduleAction === "setVolume" &&
-                                (scheduleTarget.trim() === "" || Number.isNaN(Number(scheduleTarget)) || Number(scheduleTarget) < 0 || Number(scheduleTarget) > 100))
-                            }
-                          >
-                            Spremi
-                          </Button>
-                          <Button className="action-btn" onClick={clearScheduleForm}>
-                            Očisti
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-            {showViewModal && viewModalDeviceInfo && (
-              <Dialog open={showViewModal} onClose={closeViewModal} maxWidth="md" fullWidth slotProps={{ paper: { className: 'modal' } }}>
-                <DialogTitle>
-                  <div className="modal-header">
-                    <div>
-                      <h2>Detalji: {viewModalDeviceInfo.name}</h2>
-                      <p className="form-description">Brzi pregled uređaja i njegovi rasporedi.</p>
-                    </div>
-                  </div>
-                </DialogTitle>
-                <DialogContent dividers>
-                  <div className="device-meta">
-                    <div className="detail-row">
-                      <span>IP adresa:</span>
-                      <strong>{viewModalDeviceInfo.ip}</strong>
-                    </div>
-                    <div className="detail-row">
-                      <span>MAC adresa:</span>
-                      <strong>{viewModalDeviceInfo.mac}</strong>
-                    </div>
-                    <div className="detail-row">
-                      <span>Marka:</span>
-                      <strong>{viewModalDeviceInfo.brand || "generic"}</strong>
-                    </div>
-                    <div className="detail-row">
-                      <span>Status:</span>
-                      <strong>{formatStatusText(viewModalDeviceInfo.status)}</strong>
-                    </div>
-                    <div className="detail-row">
-                      <span>Napajanje:</span>
-                      <strong>{formatPowerText(viewModalDeviceInfo.powerState)}</strong>
-                    </div>
-                    <div className="detail-row">
-                      <span>Grupa:</span>
-                      <strong>{viewModalDeviceInfo.groupName || "Bez grupe"}</strong>
-                    </div>
-                  </div>
-
-                  <div className="detail-actions">
-                    <Button className="action-btn poweron-btn" onClick={() => handlePowerOnDevice(viewModalDeviceInfo.id)}>
-                      ✅ Uključi
-                    </Button>
-                    <Button className="action-btn poweroff-btn" onClick={() => handlePowerOffDevice(viewModalDeviceInfo.id)}>
-                      ⏻ Isključi
-                    </Button>
-                    <Button className="action-btn restart-btn" onClick={() => handleRestartDevice(viewModalDeviceInfo.id)}>
-                      🔄 Restart
-                    </Button>
-                    {(["webos", "samsung"].includes(viewModalDeviceInfo.brand?.toLowerCase() || "")) && (
-                      <>
-                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "mute"); }}>
-                          🔇 Mute
-                        </Button>
-                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "unmute"); }}>
-                          🔊 Unmute
-                        </Button>
-                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeUp"); }}>
-                          🔼 Vol+
-                        </Button>
-                        <Button className="action-btn" onClick={() => { handleSendDeviceAction(viewModalDeviceInfo.id, "volumeDown"); }}>
-                          🔽 Vol-
-                        </Button>
-                        <div className="volume-set-row">
-                          <TextField
-                            type="number"
-                            size="small"
-                            variant="outlined"
-                            value={volumeValue}
-                            onChange={(e) => setVolumeValue(e.target.value)}
-                            placeholder="0-100"
-                            className="small-input"
-                          />
-                          <button
-                            type="button"
-                            className="action-btn"
-                            disabled={
-                              volumeValue.trim() === "" ||
-                              Number.isNaN(Number(volumeValue)) ||
-                              Number(volumeValue) < 0 ||
-                              Number(volumeValue) > 100
-                            }
-                            onClick={() => {
-                              const volume = Number(volumeValue);
-                              if (!Number.isNaN(volume) && volume >= 0 && volume <= 100) {
-                                handleSendDeviceAction(viewModalDeviceInfo.id, "setVolume", { volume });
-                              }
-                            }}
-                          >
-                            🎚️ Postavi volumen
-                          </button>
-                        </div>
-                        <div className="launch-app-row">
-                          <TextField
-                            size="small"
-                            variant="outlined"
-                            value={launchTarget}
-                            onChange={(e) => setLaunchTarget(e.target.value)}
-                            placeholder="App ID ili URL"
-                            className="small-input"
-                          />
-                          <button
-                            type="button"
-                            className="action-btn"
-                            disabled={!launchTarget.trim()}
-                            onClick={() => {
-                              if (launchTarget.trim()) {
-                                handleSendDeviceAction(viewModalDeviceInfo.id, "launchApp", { target: launchTarget.trim() });
-                              }
-                            }}
-                          >
-                            🚀 Otvori aplikaciju
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="detail-tabs">
-                    <button
-                      type="button"
-                      className={detailTab === "info" ? "tab-btn active" : "tab-btn"}
-                      onClick={() => setDetailTab("info")}
-                    >
-                      📋 Informacije
-                    </button>
-                    <button
-                      type="button"
-                      className={detailTab === "schedule" ? "tab-btn active" : "tab-btn"}
-                      onClick={() => setDetailTab("schedule")}
-                    >
-                      📅 Rasporedi
-                    </button>
-                  </div>
-
-                  {detailTab === "info" ? (
-                    <div className="history-section">
-                      <h3>Posljednji zapisi</h3>
-                      <ul>
-                        {selectedDeviceHistory.length === 0 ? (
-                          <li>Nema zapisa za ovaj uređaj.</li>
-                        ) : (
-                          selectedDeviceHistory.map((entry, index) => (
-                            <li key={`${viewModalDeviceInfo.id}-${index}`}>
-                              <strong>{entry.timestamp}</strong> - {entry.status} - {entry.note}
-                            </li>
-                          ))
-                        )}
-                      </ul>
-                    </div>
-                  ) : (
-                    <div className="schedule-panel">
-                      <h3>Rasporedi za {viewModalDeviceInfo.name}</h3>
-                      <p className="form-description">
-                        Pregledaj i upravljaj spremljenim rasporedima, uključujući akcije poput power, mute i otvaranje aplikacija.
-                      </p>
-                      <div className="schedule-list">
-                        {getDeviceSchedules(viewModalDeviceInfo.id).length === 0 ? (
-                          <div className="empty-log">Nema spremljenih rasporeda.</div>
-                        ) : (
-                          <div className="schedule-table">
-                            {getDeviceSchedules(viewModalDeviceInfo.id).map((schedule) => (
-                              <div key={schedule.id} className="schedule-row">
-                                <div>
-                                  <strong>{schedule.cron}</strong>
-                                  <div>{getActionLabel(schedule.action)}</div>
-                                  {schedule.description && <div className="schedule-note">{schedule.description}</div>}
-                                </div>
-                                <div className="schedule-row-actions">
-                                  <Button
-                                    className={schedule.enabled ? "action-btn poweron-btn" : "action-btn"}
-                                    onClick={() => handleToggleSchedule(schedule)}
-                                  >
-                                    {schedule.enabled ? "✅ On" : "⭕ Off"}
-                                  </Button>
-                                  <Button className="action-btn" onClick={() => fetchScheduleLogs(schedule)}>
-                                    📄 Logovi
-                                  </Button>
-                                  <Button className="action-btn" onClick={() => handleTriggerSchedule(schedule)}>
-                                    ▶️ Pokreni
-                                  </Button>
-                                  <Button className="action-btn settings-btn" onClick={() => handleEditSchedule(schedule)}>
-                                    ✏️ Uredi
-                                  </Button>
-                                  <Button className="action-btn delete-selected-btn" onClick={() => handleDeleteSchedule(schedule.id)}>
-                                    🗑️ Obriši
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="schedule-form">
-                        <h3>{editingScheduleId ? "Uredi raspored" : "Dodaj novi raspored"}</h3>
-                        <button 
-                          type="button" 
-                          className="action-btn"
-                          style={{marginBottom: 16}}
-                          onClick={() => setShowScheduleBuilder(true)}
-                        >
-                          📅 Koristi vizualni raspored
-                        </button>
-                        <label>Cron izraz</label>
-                        <TextField
-                          size="small"
-                          variant="outlined"
-                          value={scheduleCron}
-                          onChange={(e) => setScheduleCron(e.target.value)}
-                          placeholder="npr. 0 7 * * * ili 07:00"
-                          fullWidth
-                          className="small-input"
-                        />
-                        <div className="schedule-help">
-                          Unesi cron izraz s 5 polja ili vrijeme <strong>HH:MM</strong>.
-                        </div>
-                        {!cronValid && (
-                          <div className="cron-error">Cron izraz nije valjan. Očekuje se 5 polja ili vrijeme HH:MM poput 07:00.</div>
-                        )}
-                        <label>Akcija</label>
-                        <FormControl size="small" className="small-select" sx={{ minWidth: 220 }}>
-                          <Select
-                            value={scheduleAction}
-                            onChange={(e) => setScheduleAction(e.target.value)}
-                            inputProps={{
-                              name: 'viewScheduleAction',
-                              id: 'view-schedule-action-select',
-                            }}
-                          >
-                            {getAvailableActions(viewModalDeviceInfo).map((action) => (
-                              <MenuItem key={action.value} value={action.value}>
-                                {action.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </FormControl>
-                        {viewModalDeviceInfo && (
-                          <div className="form-description">
-                            Podržane akcije: {getAvailableActions(viewModalDeviceInfo).map((action) => action.label).join(", ")}
-                          </div>
-                        )}
-                        {(scheduleAction === "launchApp" || scheduleAction === "setVolume") && (
-                          <TextField
-                            size="small"
-                            variant="outlined"
-                            value={scheduleTarget}
-                            onChange={(e) => setScheduleTarget(e.target.value)}
-                            placeholder={
-                              scheduleAction === "launchApp"
-                                ? "App ID ili URL"
-                                : "Volumen 0-100"
-                            }
-                            className="small-input"
-                            fullWidth
-                          />
-                        )}
-                        <div className="schedule-form-row">
-                          <FormControlLabel
-                            className="schedule-enable-label"
-                            control={
-                              <Checkbox
-                                size="small"
-                                checked={scheduleEnabled}
-                                onChange={(e) => setScheduleEnabled(e.target.checked)}
-                              />
-                            }
-                            label="Omogući raspored"
-                          />
-                          <div className="schedule-buttons">
-                            <Button
-                              className="save-btn"
-                              onClick={handleSaveSchedule}
-                              disabled={
-                                !cronValid ||
-                                (scheduleAction === "launchApp" && !scheduleTarget.trim()) ||
-                                (scheduleAction === "setVolume" &&
-                                  (scheduleTarget.trim() === "" || Number.isNaN(Number(scheduleTarget)) || Number(scheduleTarget) < 0 || Number(scheduleTarget) > 100))
-                              }
-                            >
-                              Spremi
-                            </Button>
-                            <Button className="action-btn" onClick={clearScheduleForm}>
-                              Očisti
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </DialogContent>
-              </Dialog>
-            )}
-          </>
+          </Suspense>
         )}
-      </main>
+        {activePage === "groups" && (
+          <Suspense fallback={pageFallback}>
+            <GroupsPage
+              groupStatusSummary={groupStatusSummary}
+              groupName={groupName}
+              setGroupName={setGroupName}
+              handleCreateGroup={handleCreateGroup}
+              handleRestartGroup={handleRestartGroup}
+              handlePowerOnGroup={handlePowerOnGroup}
+              handlePowerOffGroup={handlePowerOffGroup}
+              handleOpenAuditForGroup={handleOpenAuditForGroup}
+            />
+          </Suspense>
+        )}
+        {activePage === "audit" && (
+          <Suspense fallback={pageFallback}>
+            <AuditPage
+              auditDeviceFilter={auditDeviceFilter}
+              setAuditDeviceFilter={setAuditDeviceFilter}
+              auditGroupFilter={auditGroupFilter}
+              setAuditGroupFilter={setAuditGroupFilter}
+              loadAuditLogs={loadAuditLogs}
+              auditLoading={auditLoading}
+              devices={devices}
+              groups={groups}
+              auditLogs={auditLogs}
+            />
+          </Suspense>
+        )}
+        {activePage === "settings" && (
+          <Suspense fallback={pageFallback}>
+            <SettingsPage
+              backendUrl={backendUrl}
+              setBackendUrl={setBackendUrl}
+              schedulerOn={schedulerOn}
+              setSchedulerOn={setSchedulerOn}
+              loadHealthSummary={loadHealthSummary}
+              healthLoading={healthLoading}
+              healthSummary={healthSummary}
+              handleCreateBackup={handleCreateBackup}
+              backupLoading={backupLoading}
+              loadBackups={loadBackups}
+              backupList={backupList}
+              selectedBackup={selectedBackup}
+              setSelectedBackup={setSelectedBackup}
+              handleRestoreBackup={handleRestoreBackup}
+              handleRunMaintenanceNow={handleRunMaintenanceNow}
+              diagnosticsLoading={diagnosticsLoading}
+              loadDiagnostics={loadDiagnostics}
+              handleShowDiagnosticsSnapshot={handleShowDiagnosticsSnapshot}
+              handleDownloadDiagnosticsSnapshot={handleDownloadDiagnosticsSnapshot}
+              diagnostics={diagnostics}
+              showMessage={showMessage}
+            />
+          </Suspense>
+        )}
+        {activePage === "devices" && (
+          <Suspense fallback={pageFallback}>
+            <DevicesPage
+              devices={devices}
+              groups={groups}
+              search={search}
+              setSearch={setSearch}
+              groupFilter={groupFilter}
+              setGroupFilter={setGroupFilter}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              powerFilter={powerFilter}
+              setPowerFilter={setPowerFilter}
+              activityFilter={activityFilter}
+              setActivityFilter={setActivityFilter}
+              registrationFrom={registrationFrom}
+              setRegistrationFrom={setRegistrationFrom}
+              registrationTo={registrationTo}
+              setRegistrationTo={setRegistrationTo}
+              selectedDevice={selectedDevice}
+              handleClearSelection={handleClearSelection}
+              handleRestartSelected={handleRestartSelected}
+              handleDeleteSelected={handleDeleteSelected}
+              openAssignGroupModal={openAssignGroupModal}
+              loading={loading}
+              filteredDevices={filteredDevices}
+              toggleDevice={toggleDevice}
+              formatPowerText={formatPowerText}
+              formatStatusText={formatStatusText}
+              handleViewDevice={handleViewDevice}
+              setEditingId={setEditingId}
+              setDeviceName={setDeviceName}
+              setDeviceIp={setDeviceIp}
+              setDeviceMac={setDeviceMac}
+              setModalGroupId={setModalGroupId}
+              setShowModal={setShowModal}
+              handleOpenAuditForDevice={handleOpenAuditForDevice}
+              handleRestartDevice={handleRestartDevice}
+              setPendingDelete={setPendingDelete}
+              setShowDeleteConfirm={setShowDeleteConfirm}
+              showDeleteConfirm={showDeleteConfirm}
+              cancelDelete={cancelDelete}
+              confirmDelete={confirmDelete}
+              showAssignGroupModal={showAssignGroupModal}
+              setShowAssignGroupModal={setShowAssignGroupModal}
+              selectedAssignGroupId={selectedAssignGroupId}
+              setSelectedAssignGroupId={setSelectedAssignGroupId}
+              assignGroupToSelected={assignGroupToSelected}
+              messageModal={messageModal}
+              setMessageModal={setMessageModal}
+              closeMessageModal={closeMessageModal}
+              handleMessageConfirm={handleMessageConfirm}
+              selectedDeviceHistory={selectedDeviceHistory}
+              volumeValue={volumeValue}
+              setVolumeValue={setVolumeValue}
+              launchTarget={launchTarget}
+              setLaunchTarget={setLaunchTarget}
+              detailTab={detailTab}
+              setDetailTab={setDetailTab}
+              getDeviceSchedules={getDeviceSchedules}
+              getAvailableActions={getAvailableActions}
+              getActionLabel={getActionLabel}
+              handleToggleSchedule={handleToggleSchedule}
+              fetchScheduleLogs={fetchScheduleLogs}
+              handleTriggerSchedule={handleTriggerSchedule}
+              handleEditSchedule={handleEditSchedule}
+              handleDeleteSchedule={handleDeleteSchedule}
+              setShowScheduleBuilder={setShowScheduleBuilder}
+              scheduleCron={scheduleCron}
+              setScheduleCron={setScheduleCron}
+              scheduleUseTime={scheduleUseTime}
+              setScheduleUseTime={setScheduleUseTime}
+              scheduleTime={scheduleTime}
+              setScheduleTime={setScheduleTime}
+              cronValid={cronValid}
+              scheduleAction={scheduleAction}
+              setScheduleAction={setScheduleAction}
+              scheduleTarget={scheduleTarget}
+              setScheduleTarget={setScheduleTarget}
+              currentStepAction={currentStepAction}
+              setCurrentStepAction={setCurrentStepAction}
+              handlePowerOnDevice={handlePowerOnDevice}
+              handlePowerOffDevice={handlePowerOffDevice}
+              handleSendDeviceAction={handleSendDeviceAction}
+              getAvailableActionsForDevice={getAvailableActionsForDevice}
+              showMessage={showMessage}
+            />
+          </Suspense>
+        )}
+                {activePage === "notfound" && (
+          <Container maxWidth="sm" sx={{ py: 6 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>404 - Stranica nije pronadena</Typography>
+            <Typography variant="body1" color="text.secondary">Stranica koju tražiš ne postoji.</Typography>
+          </Container>
+        )}
 
       <DeviceEditorModal
         isOpen={showModal}
@@ -3874,9 +2087,10 @@ function App() {
       />
       
       <ToastContainer messages={toastMessages} onRemove={removeToast} />
-    </div>
-    </>
+      </AppLayout>
+    </ThemeProvider>
   );
 }
 
 export default App;
+

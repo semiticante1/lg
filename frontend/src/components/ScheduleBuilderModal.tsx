@@ -7,7 +7,10 @@ import Button from '@mui/material/Button';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import Box from '@mui/material/Box';
-import "./ScheduleBuilderModal.css";
+import Typography from '@mui/material/Typography';
+import Paper from '@mui/material/Paper';
+import Divider from '@mui/material/Divider';
+import Chip from '@mui/material/Chip';
 
 interface ScheduleBuilderProps {
   isOpen: boolean;
@@ -45,6 +48,10 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
 
   useEffect(() => {
     // Parse current cron to populate fields
+    let parsedHour: number | null = null;
+    let parsedMinute: number | null = null;
+    let parsedDays: number[] | null = null;
+
     if (currentCron) {
       const parts = currentCron.trim().split(/\s+/);
       if (parts.length >= 5) {
@@ -54,17 +61,31 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
           const h = parseInt(hrs, 10);
           const m = parseInt(min, 10);
           if (!isNaN(h) && !isNaN(m)) {
-            setHour(h);
-            setMinute(m);
+            parsedHour = h;
+            parsedMinute = m;
           }
         }
         // Parse day of week (5th field)
         if (parts[4] && parts[4] !== "*") {
           const days = parts[4].split(",").map((d) => parseInt(d, 10));
-          setSelectedDays(days.filter((d) => !isNaN(d)));
+          parsedDays = days.filter((d) => !isNaN(d));
         }
       }
     }
+
+    const timer = window.setTimeout(() => {
+      if (parsedHour !== null) {
+        setHour(parsedHour);
+      }
+      if (parsedMinute !== null) {
+        setMinute(parsedMinute);
+      }
+      if (parsedDays !== null) {
+        setSelectedDays(parsedDays);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [currentCron]);
 
   const generateCron = (h: number, m: number, days: number[]): string => {
@@ -128,93 +149,132 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
       open={isOpen}
       onClose={onClose}
       aria-labelledby="schedule-builder-dialog-title"
-      slotProps={{ paper: { className: 'schedule-builder-modal' } }}
       fullWidth
-      maxWidth="md"
+      maxWidth="sm"
+      slotProps={{
+        paper: {
+          sx: {
+            borderRadius: 2,
+          },
+        },
+      }}
     >
-      <DialogTitle id="schedule-builder-dialog-title">Postavi raspored</DialogTitle>
-      <DialogContent dividers>
-        <Box sx={{ mb: 2 }}>
-          <div className="schedule-builder-header">
-            <p className="schedule-builder-subtitle">{deviceName} - {action}</p>
-          </div>
+      <DialogTitle id="schedule-builder-dialog-title" sx={{ fontWeight: 600 }}>
+        Postavi raspored
+      </DialogTitle>
+      <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        <Box>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+            {deviceName} — {action}
+          </Typography>
+        </Box>
 
-          <div className="schedule-section">
-            <h3>Vrijeme</h3>
-            <div className="time-picker-section">
-              <div className="time-input-group">
-                <label>Sat</label>
-                <div className="hour-picker">
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleHourChange((hour - 1 + 24) % 24)}
-                  >
-                    ◀
-                  </Button>
-                  <div className="hour-display">
-                    {String(hour).padStart(2, "0")}
-                  </div>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleHourChange((hour + 1) % 24)}
-                  >
-                    ▶
-                  </Button>
-                </div>
-              </div>
+        {/* Time Section */}
+        <Box>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+            ⏰ Vrijeme
+          </Typography>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 2, mb: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" color="textSecondary">
+                Sat
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handleHourChange((hour - 1 + 24) % 24)}
+                sx={{ minWidth: 'auto' }}
+              >
+                ◀
+              </Button>
+              <Paper
+                sx={{
+                  width: 60,
+                  textAlign: 'center',
+                  py: 1,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  {String(hour).padStart(2, "0")}
+                </Typography>
+              </Paper>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handleHourChange((hour + 1) % 24)}
+                sx={{ minWidth: 'auto' }}
+              >
+                ▶
+              </Button>
+            </Box>
 
-              <div className="time-separator">:</div>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>:</Typography>
 
-              <div className="time-input-group">
-                <label>Minuta</label>
-                <div className="minute-picker">
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleMinuteChange((minute - 5 + 60) % 60)}
-                  >
-                    ◀
-                  </Button>
-                  <div className="minute-display">
-                    {String(minute).padStart(2, "0")}
-                  </div>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => handleMinuteChange((minute + 5) % 60)}
-                  >
-                    ▶
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+              <Typography variant="caption" color="textSecondary">
+                Minuta
+              </Typography>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handleMinuteChange((minute - 5 + 60) % 60)}
+                sx={{ minWidth: 'auto' }}
+              >
+                ◀
+              </Button>
+              <Paper
+                sx={{
+                  width: 60,
+                  textAlign: 'center',
+                  py: 1,
+                  bgcolor: 'primary.main',
+                  color: 'primary.contrastText',
+                }}
+              >
+                <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  {String(minute).padStart(2, "0")}
+                </Typography>
+              </Paper>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => handleMinuteChange((minute + 5) % 60)}
+                sx={{ minWidth: 'auto' }}
+              >
+                ▶
+              </Button>
+            </Box>
+          </Box>
 
-            <div className="time-display-large">
-              {String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}
-            </div>
+          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+            {presetSchedules.map((preset) => (
+              <Button
+                key={preset.label}
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  handleHourChange(preset.hour);
+                  handleMinuteChange(preset.minute);
+                }}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </Box>
+        </Box>
 
-            <div className="preset-buttons">
-              {presetSchedules.map((preset) => (
-                <Button
-                  key={preset.label}
-                  className="preset-btn"
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    handleHourChange(preset.hour);
-                    handleMinuteChange(preset.minute);
-                  }}
-                >
-                  {preset.label}
-                </Button>
-              ))}
-            </div>
-          </div>
+        <Divider />
 
-          <div className="schedule-section">
-            <h3>Dani</h3>
+        {/* Days Section */}
+        <Box>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+            📅 Dani
+          </Typography>
+          
+          <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
             <ToggleButtonGroup
               value={selectedDays}
               onChange={handleDayGroupChange}
@@ -227,55 +287,75 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
+          </Box>
 
-            <div className="preset-buttons">
-              {presetDays.map((preset) => (
-                <Button
-                  key={preset.label}
-                  className="preset-btn"
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    setSelectedDays(preset.days);
-                    onCronChange(generateCron(hour, minute, preset.days));
-                  }}
-                >
-                  {preset.label}
-                </Button>
-              ))}
-            </div>
+          <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+            {presetDays.map((preset) => (
+              <Button
+                key={preset.label}
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  setSelectedDays(preset.days);
+                  onCronChange(generateCron(hour, minute, preset.days));
+                }}
+              >
+                {preset.label}
+              </Button>
+            ))}
+          </Box>
 
-            {selectedDays.length > 0 && (
-              <div className="selected-days-info">
-                <strong>Odabrani dani:</strong> {selectedDays.map((d) => dayNames[d]).join(", ")}
-              </div>
-            )}
-          </div>
+          {selectedDays.length > 0 && (
+            <Box>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
+                <strong>Odabrani dani:</strong>
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'row', gap: 0.5, flexWrap: 'wrap' }}>
+                {selectedDays.map((d) => (
+                  <Chip key={d} label={dayNames[d]} size="small" variant="outlined" />
+                ))}
+              </Box>
+            </Box>
+          )}
+        </Box>
 
-          <div className="schedule-summary">
-            <div className="summary-item">
-              <span className="summary-label">Vrijeme:</span>
-              <span className="summary-value">{String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}</span>
-            </div>
-            <div className="summary-item">
-              <span className="summary-label">Dani:</span>
-              <span className="summary-value">
+        <Divider />
+
+        {/* Summary Section */}
+        <Box sx={{ bgcolor: 'background.paper', p: 2, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            📋 Sažetak
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="textSecondary">Vrijeme:</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="textSecondary">Dani:</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
                 {selectedDays.length === 7
                   ? "Svakodnevno"
                   : selectedDays.length === 5 && selectedDays.join(",") === "1,2,3,4,5"
                   ? "Radni dani (Po-Pe)"
                   : `${selectedDays.length} dan(a)`}
-              </span>
-            </div>
-            <div className="summary-item">
-              <span className="summary-label">Cron:</span>
-              <span className="summary-cron">{generateCron(hour, minute, selectedDays)}</span>
-            </div>
-          </div>
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, borderTop: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="body2" color="textSecondary">Cron:</Typography>
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                {generateCron(hour, minute, selectedDays)}
+              </Typography>
+            </Box>
+          </Box>
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} disabled={loading}>Otkaži</Button>
+        <Button onClick={onClose} disabled={loading}>
+          Otkaži
+        </Button>
         <Button
           onClick={handleSave}
           disabled={loading || selectedDays.length === 0}
