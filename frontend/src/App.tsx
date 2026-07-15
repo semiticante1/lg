@@ -3,6 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import Alert from '@mui/material/Alert';
+import Snackbar from '@mui/material/Snackbar';
+import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { createAppTheme } from './theme';
@@ -1871,7 +1873,6 @@ function App() {
         handlePowerOnAll={handlePowerOnAll}
         handlePowerOffAll={handlePowerOffAll}
         handleOpenModal={handleOpenModal}
-        statusMessage={statusMessage}
         lastRefresh={lastRefresh}
       >
         {activePage === "dashboard" && (
@@ -2057,12 +2058,28 @@ function App() {
         onSave={handleSave}
       />
 
-      {loading && <div className="loading-overlay">Osvježavanje...</div>}
-      {statusMessage && (
-        <Alert severity="info" className="status-message" sx={{ mb: 2 }}>
+      <Snackbar
+        open={loading}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ mb: { xs: 1.5, sm: 2 } }}
+      >
+        <Alert
+          severity="info"
+          icon={<CircularProgress size={16} color="inherit" />}
+          sx={{ width: '100%' }}
+        >
+          Osvježavanje...
+        </Alert>
+      </Snackbar>
+      <Snackbar
+        open={Boolean(statusMessage)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ mb: { xs: loading ? 9 : 1.5, sm: loading ? 10 : 2 } }}
+      >
+        <Alert severity="info" sx={{ width: '100%' }}>
           {statusMessage}
         </Alert>
-      )}
+      </Snackbar>
       
       <DeviceDiscoveryModal
         isOpen={showDiscoveryModal}

@@ -40,7 +40,6 @@ interface AppLayoutProps {
   handlePowerOffAll: () => void;
   handleOpenModal: () => void;
   children: React.ReactNode;
-  statusMessage?: string;
   lastRefresh?: string;
 }
 
@@ -55,7 +54,6 @@ export default function AppLayout({
   handlePowerOffAll,
   handleOpenModal,
   children,
-  statusMessage,
   lastRefresh,
 }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -81,31 +79,6 @@ export default function AppLayout({
         flexDirection: 'column',
       }}
     >
-      <Box
-        sx={{
-          p: 2.5,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-        }}
-      >
-        <TvIcon sx={{ fontSize: 28 }} />
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 700,
-            background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-          }}
-        >
-          TV Control
-        </Typography>
-      </Box>
-
       <List sx={{ flex: 1, pt: 1 }}>
         {navigationItems.map((item) => (
           <ListItem key={item.path} disablePadding>
@@ -183,12 +156,6 @@ export default function AppLayout({
           <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
             Herceg TV Control
           </Typography>
-
-          {statusMessage && (
-            <Typography variant="body2" sx={{ mr: 2, color: 'rgba(255, 255, 255, 0.7)' }}>
-              {statusMessage}
-            </Typography>
-          )}
 
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Tooltip title="Refresh Status">
@@ -280,8 +247,8 @@ export default function AppLayout({
           '& .MuiDrawer-paper': {
             boxSizing: 'border-box',
             width: drawerWidth,
-            top: { sm: 64 },
-            height: 'calc(100vh - 64px)',
+            top: 0,
+            height: '100vh',
           },
         }}
         open
