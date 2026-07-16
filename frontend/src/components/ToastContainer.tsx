@@ -1,5 +1,6 @@
 import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
+import Typography from "@mui/material/Typography";
 import type { ToastMessage } from "../types/app";
 
 interface ToastContainerProps {
@@ -24,8 +25,12 @@ export default function ToastContainer({ messages, onRemove }: ToastContainerPro
             severity={toast.type as "success" | "error" | "info" | "warning"}
             variant="filled"
           >
-            <strong style={{ display: "block" }}>{toast.title}</strong>
-            <div>{toast.message}</div>
+            <Typography component="span" variant="subtitle2" sx={{ display: "block", fontWeight: 700 }}>
+              {toast.title}
+            </Typography>
+            <Typography component="span" variant="body2" sx={{ display: "block" }}>
+              {toast.message}
+            </Typography>
           </Alert>
         </Snackbar>
       ))}

@@ -255,7 +255,13 @@ const Devices: FC<Props> = (props) => {
           <DialogTitle>{messageModal.title}</DialogTitle>
           <DialogContent>
             {messageModal.title?.toLowerCase().includes('log') ? (
-              <pre style={{ whiteSpace: 'pre-wrap' }}>{messageModal.message}</pre>
+              <Typography
+                component="pre"
+                variant="body2"
+                sx={{ whiteSpace: 'pre-wrap', m: 0, fontFamily: 'inherit' }}
+              >
+                {messageModal.message}
+              </Typography>
             ) : (
               <Typography variant="body2">{messageModal.message}</Typography>
             )}

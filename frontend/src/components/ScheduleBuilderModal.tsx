@@ -308,7 +308,9 @@ const ScheduleBuilderModal: React.FC<ScheduleBuilderProps> = ({
           {selectedDays.length > 0 && (
             <Box>
               <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-                <strong>Odabrani dani:</strong>
+                <Typography component="span" sx={{ fontWeight: 700 }}>
+                  Odabrani dani:
+                </Typography>
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'row', gap: 0.5, flexWrap: 'wrap' }}>
                 {selectedDays.map((d) => (

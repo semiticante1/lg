@@ -5,6 +5,7 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import Button from '@mui/material/Button';
 import Tooltip from '@mui/material/Tooltip';
+import Box from '@mui/material/Box';
 import { NavLink } from 'react-router-dom';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PowerIcon from '@mui/icons-material/Power';
@@ -41,46 +42,46 @@ export default function AppShell({
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Herceg TV Control
           </Typography>
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 1 }}>
             <Tooltip title="Refresh">
-              <span>
+              <Box component="span">
                 <IconButton color="inherit" aria-label="refresh" onClick={refreshAll} disabled={loading}>
                   <RefreshIcon />
                 </IconButton>
-              </span>
+              </Box>
             </Tooltip>
             <Tooltip title="Power On All TVs">
-              <span>
+              <Box component="span">
                 <Button color="inherit" startIcon={<PowerIcon />} onClick={handlePowerOnAll}>
                   Upali sve
                 </Button>
-              </span>
+              </Box>
             </Tooltip>
             <Tooltip title="Power Off All TVs">
-              <span>
+              <Box component="span">
                 <Button color="inherit" startIcon={<PowerOffIcon />} onClick={handlePowerOffAll}>
                   Isključi sve
                 </Button>
-              </span>
+              </Box>
             </Tooltip>
             <Tooltip title="Add Device">
-              <span>
+              <Box component="span">
                 <Button color="inherit" startIcon={<AddIcon />} onClick={handleOpenModal}>
                   Dodaj
                 </Button>
-              </span>
+              </Box>
             </Tooltip>
             <IconButton color="inherit" aria-label="toggle theme" onClick={toggleTheme}>
               {theme === "light" ? <DarkModeIcon /> : <LightModeIcon />}
             </IconButton>
-          </div>
+          </Box>
         </Toolbar>
       </AppBar>
 
-      <div className={`app theme-${theme}`}>
-        <aside className="sidebar">
-          <h2>TV Upravljač</h2>
-          <div className="sidebar-menu">
+      <Box className={`app theme-${theme}`}>
+        <Box component="aside" className="sidebar">
+          <Typography component="h2">TV Upravljač</Typography>
+          <Box className="sidebar-menu">
             <NavLink to="/" end className={({ isActive }: { isActive: boolean }) => (isActive ? 'active' : '')}>
               📊 Početna
             </NavLink>
@@ -96,11 +97,11 @@ export default function AppShell({
             <NavLink to="/settings" className={({ isActive }: { isActive: boolean }) => (isActive ? 'active' : '')}>
               ⚙️ Postavke
             </NavLink>
-          </div>
-        </aside>
+          </Box>
+        </Box>
 
-        <main className="content">{children}</main>
-      </div>
+        <Box component="main" className="content">{children}</Box>
+      </Box>
     </>
   );
 }

@@ -159,7 +159,7 @@ export default function AppLayout({
 
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Tooltip title="Refresh Status">
-              <span>
+              <Box component="span">
                 <IconButton
                   color="inherit"
                   size="small"
@@ -168,11 +168,11 @@ export default function AppLayout({
                 >
                   <RefreshIcon />
                 </IconButton>
-              </span>
+              </Box>
             </Tooltip>
 
             <Tooltip title="Power On All">
-              <span>
+              <Box component="span">
                 <Button
                   color="inherit"
                   size="small"
@@ -182,11 +182,11 @@ export default function AppLayout({
                 >
                   On
                 </Button>
-              </span>
+              </Box>
             </Tooltip>
 
             <Tooltip title="Power Off All">
-              <span>
+              <Box component="span">
                 <Button
                   color="inherit"
                   size="small"
@@ -196,11 +196,11 @@ export default function AppLayout({
                 >
                   Off
                 </Button>
-              </span>
+              </Box>
             </Tooltip>
 
             <Tooltip title="Add Device">
-              <span>
+              <Box component="span">
                 <Button
                   color="inherit"
                   size="small"
@@ -210,7 +210,7 @@ export default function AppLayout({
                 >
                   Add
                 </Button>
-              </span>
+              </Box>
             </Tooltip>
 
             <Divider orientation="vertical" flexItem sx={{ my: 1, opacity: 0.5 }} />
