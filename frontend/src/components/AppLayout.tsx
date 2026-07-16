@@ -125,7 +125,7 @@ export default function AppLayout({
           onClick={refreshAll}
           disabled={loading}
         >
-          Refresh
+          Osvježi
         </Button>
       </Box>
     </Box>
@@ -158,7 +158,7 @@ export default function AppLayout({
           </Typography>
 
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <Tooltip title="Refresh Status">
+            <Tooltip title="Osvježi status">
               <Box component="span">
                 <IconButton
                   color="inherit"
@@ -171,7 +171,7 @@ export default function AppLayout({
               </Box>
             </Tooltip>
 
-            <Tooltip title="Power On All">
+            <Tooltip title="Upali sve">
               <Box component="span">
                 <Button
                   color="inherit"
@@ -180,12 +180,12 @@ export default function AppLayout({
                   onClick={handlePowerOnAll}
                   sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                 >
-                  On
+                  Upali
                 </Button>
               </Box>
             </Tooltip>
 
-            <Tooltip title="Power Off All">
+            <Tooltip title="Ugasi sve">
               <Box component="span">
                 <Button
                   color="inherit"
@@ -194,12 +194,12 @@ export default function AppLayout({
                   onClick={handlePowerOffAll}
                   sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                 >
-                  Off
+                  Ugasi
                 </Button>
               </Box>
             </Tooltip>
 
-            <Tooltip title="Add Device">
+            <Tooltip title="Dodaj uređaj">
               <Box component="span">
                 <Button
                   color="inherit"
@@ -208,14 +208,14 @@ export default function AppLayout({
                   onClick={handleOpenModal}
                   sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
                 >
-                  Add
+                  Dodaj
                 </Button>
               </Box>
             </Tooltip>
 
             <Divider orientation="vertical" flexItem sx={{ my: 1, opacity: 0.5 }} />
 
-            <Tooltip title={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}>
+            <Tooltip title={theme === 'light' ? 'Prebaci na tamni prikaz' : 'Prebaci na svijetli prikaz'}>
               <IconButton color="inherit" size="small" onClick={toggleTheme}>
                 {theme === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
               </IconButton>
