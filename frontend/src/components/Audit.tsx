@@ -15,6 +15,8 @@ import TableContainer from '@mui/material/TableContainer';
 import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
+import Pagination from '@mui/material/Pagination';
+import PaginationItem from '@mui/material/PaginationItem';
 import type { AuditLogEntry, Device, Group } from '../types/app';
 
 interface Props {
@@ -22,14 +24,29 @@ interface Props {
   setAuditDeviceFilter: (v: string) => void;
   auditGroupFilter: string;
   setAuditGroupFilter: (v: string) => void;
-  loadAuditLogs: (deviceId?: string, groupId?: string) => Promise<void> | void;
+  loadAuditLogs: (deviceId?: string, groupId?: string, page?: number, pageSize?: number) => Promise<void> | void;
   auditLoading: boolean;
   devices: Device[];
   groups: Group[];
   auditLogs: AuditLogEntry[];
+  auditPage: number;
+  setAuditPage: (v: number) => void;
+  auditPageSize: number;
+  auditTotalCount: number;
 }
 
-export default function Audit({ auditDeviceFilter, setAuditDeviceFilter, auditGroupFilter, setAuditGroupFilter, loadAuditLogs, auditLoading, devices, groups, auditLogs }: Props) {
+export default function Audit({ auditDeviceFilter, setAuditDeviceFilter, auditGroupFilter, setAuditGroupFilter, loadAuditLogs, auditLoading, devices, groups, auditLogs, auditPage, setAuditPage, auditPageSize, auditTotalCount }: Props) {
+  const totalPages = Math.max(1, Math.ceil(auditTotalCount / auditPageSize));
+
+  const handleRefresh = () => {
+    void loadAuditLogs(auditDeviceFilter, auditGroupFilter, auditPage, auditPageSize);
+  };
+
+  const handlePageChange = (_event: unknown, value: number) => {
+    setAuditPage(value);
+    void loadAuditLogs(auditDeviceFilter, auditGroupFilter, value, auditPageSize);
+  };
+
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
@@ -43,7 +60,12 @@ export default function Audit({ auditDeviceFilter, setAuditDeviceFilter, auditGr
         <FormControl size="small" sx={{ minWidth: 220 }}>
           <Select
             value={auditDeviceFilter}
-            onChange={(e) => setAuditDeviceFilter(String(e.target.value))}
+            onChange={(e) => {
+              const value = String(e.target.value);
+              setAuditDeviceFilter(value);
+              setAuditPage(1);
+              void loadAuditLogs(value, auditGroupFilter, 1, auditPageSize);
+            }}
             displayEmpty
             inputProps={{ name: "auditDeviceFilter", id: "audit-device-filter" }}
           >
@@ -59,7 +81,12 @@ export default function Audit({ auditDeviceFilter, setAuditDeviceFilter, auditGr
         <FormControl size="small" sx={{ minWidth: 220 }}>
           <Select
             value={auditGroupFilter}
-            onChange={(e) => setAuditGroupFilter(String(e.target.value))}
+            onChange={(e) => {
+              const value = String(e.target.value);
+              setAuditGroupFilter(value);
+              setAuditPage(1);
+              void loadAuditLogs(auditDeviceFilter, value, 1, auditPageSize);
+            }}
             displayEmpty
             inputProps={{ name: "auditGroupFilter", id: "audit-group-filter" }}
           >
@@ -72,7 +99,7 @@ export default function Audit({ auditDeviceFilter, setAuditDeviceFilter, auditGr
           </Select>
         </FormControl>
 
-        <Button type="button" variant="contained" onClick={() => loadAuditLogs(auditDeviceFilter, auditGroupFilter)} disabled={auditLoading}>
+        <Button type="button" variant="contained" onClick={handleRefresh} disabled={auditLoading}>
           {auditLoading ? "Učitavam..." : "Osvježi audit"}
         </Button>
       </Box>
@@ -136,6 +163,21 @@ export default function Audit({ auditDeviceFilter, setAuditDeviceFilter, auditGr
           </Table>
         </TableContainer>
       </Paper>
+
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2.5, flexWrap: 'wrap', gap: 1.5 }}>
+        <Typography variant="body2" color="text.secondary">
+          {auditTotalCount > 0 ? `Prikazano ${auditLogs.length} od ${auditTotalCount} zapisa` : 'Nema zapisa'}
+        </Typography>
+        <Pagination
+          count={totalPages}
+          page={auditPage - 1}
+          onChange={handlePageChange}
+          siblingCount={1}
+          boundaryCount={1}
+          color="primary"
+          renderItem={(item) => <PaginationItem {...item} />}
+        />
+      </Box>
     </Container>
   );
 }

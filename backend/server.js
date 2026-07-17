@@ -2222,7 +2222,9 @@ app.post("/groups/:id/poweron", async (req, res) => {
 
 app.get("/audit-logs", async (req, res) => {
   try {
-    const limit = Math.min(500, Math.max(1, Number(req.query.limit || 100)));
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(500, Math.max(1, Number(req.query.limit || 10)));
+    const offset = (page - 1) * limit;
     const params = [];
     const filters = [];
 
@@ -2252,12 +2254,18 @@ app.get("/audit-logs", async (req, res) => {
     }
 
     const whereSql = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const totalResult = await getAsync(`SELECT COUNT(*) AS total FROM audit_logs ${whereSql}`, params);
     const rows = await allAsync(
-      `SELECT * FROM audit_logs ${whereSql} ORDER BY id DESC LIMIT ?`,
-      [...params, limit]
+      `SELECT * FROM audit_logs ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
     );
 
-    res.json(rows.map((row) => ({ ...row, details: safeJsonParse(row.details, null) })));
+    res.json({
+      items: rows.map((row) => ({ ...row, details: safeJsonParse(row.details, null) })),
+      total: Number(totalResult?.total || 0),
+      page,
+      limit,
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

@@ -25,6 +25,8 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
+import Pagination from '@mui/material/Pagination';
+import PaginationItem from '@mui/material/PaginationItem';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
@@ -35,7 +37,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined';
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined';
 import RestartAltOutlined from '@mui/icons-material/RestartAltOutlined';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
-import type { FC } from 'react';
+import { useEffect, useState, type FC } from 'react';
 import type {
   Device,
   DeviceHistoryEntry,
@@ -200,6 +202,16 @@ const Devices: FC<Props> = (props) => {
     setActivityFilter,
     groups,
   } = props;
+
+  const [devicePage, setDevicePage] = useState(1);
+  const pageSize = 10;
+
+  useEffect(() => {
+    setDevicePage(1);
+  }, [filteredDevices.length, search, groupFilter, statusFilter, powerFilter, activityFilter, registrationFrom, registrationTo]);
+
+  const totalDevicePages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));
+  const paginatedDevices = filteredDevices.slice((devicePage - 1) * pageSize, devicePage * pageSize);
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -411,7 +423,7 @@ const Devices: FC<Props> = (props) => {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredDevices.map((device) => (
+                paginatedDevices.map((device) => (
                   <TableRow key={device.id} hover>
                     <TableCell padding="checkbox">
                       <Checkbox size="small" checked={device.selected} onChange={() => toggleDevice(device.id)} sx={{ padding: '6px' }} />
@@ -536,6 +548,21 @@ const Devices: FC<Props> = (props) => {
           </TableContainer>
         )}
       </Paper>
+
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, mb: 3 }}>
+        <Typography variant="body2" color="text.secondary">
+          {filteredDevices.length > 0 ? `Prikazano ${paginatedDevices.length} od ${filteredDevices.length} uređaja` : 'Nema uređaja'}
+        </Typography>
+        <Pagination
+          count={totalDevicePages}
+          page={devicePage - 1}
+          onChange={(_event, value) => setDevicePage(value)}
+          siblingCount={1}
+          boundaryCount={1}
+          color="primary"
+          renderItem={(item) => <PaginationItem {...item} />}
+        />
+      </Box>
 
       {selectedDevice && (
         <Paper sx={{ p: 3 }}>

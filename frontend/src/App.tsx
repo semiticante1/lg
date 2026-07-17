@@ -119,6 +119,9 @@ function App() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditDeviceFilter, setAuditDeviceFilter] = useState<string>("all");
   const [auditGroupFilter, setAuditGroupFilter] = useState<string>("all");
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditPageSize] = useState(10);
+  const [auditTotalCount, setAuditTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -228,11 +231,12 @@ function App() {
     void refreshAllRef.current();
   }, []);
 
-  const loadAuditLogs = async (deviceId?: string, groupId?: string) => {
+  const loadAuditLogs = async (deviceId?: string, groupId?: string, page = auditPage, pageSize = auditPageSize) => {
     setAuditLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("limit", "7");
+      params.set("page", String(page));
+      params.set("limit", String(pageSize));
       if (deviceId && deviceId !== "all") {
         params.set("deviceId", deviceId);
       }
@@ -242,10 +246,15 @@ function App() {
 
       const response = await fetch(`${baseUrl}/audit-logs?${params.toString()}`);
       const data = await response.json();
-      setAuditLogs(Array.isArray(data) ? data : []);
+      const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : [];
+      const total = typeof data?.total === "number" ? data.total : items.length;
+      setAuditLogs(items);
+      setAuditTotalCount(total);
+      setAuditPage(page);
     } catch (error) {
       console.error("Učitavanje audit loga nije uspjelo:", error);
       setAuditLogs([]);
+      setAuditTotalCount(0);
     } finally {
       setAuditLoading(false);
     }
@@ -1754,15 +1763,17 @@ function App() {
   const handleOpenAuditForDevice = async (deviceId: number) => {
     setAuditDeviceFilter(String(deviceId));
     setAuditGroupFilter("all");
+    setAuditPage(1);
     navigate('/audit');
-    await loadAuditLogs(String(deviceId), "all");
+    await loadAuditLogs(String(deviceId), "all", 1, auditPageSize);
   };
 
   const handleOpenAuditForGroup = async (groupId: number) => {
     setAuditGroupFilter(String(groupId));
     setAuditDeviceFilter("all");
+    setAuditPage(1);
     navigate('/audit');
-    await loadAuditLogs("all", String(groupId));
+    await loadAuditLogs("all", String(groupId), 1, auditPageSize);
   };
 
   refreshAllRef.current = refreshAll;
@@ -1910,6 +1921,10 @@ function App() {
               devices={devices}
               groups={groups}
               auditLogs={auditLogs}
+              auditPage={auditPage}
+              setAuditPage={setAuditPage}
+              auditPageSize={auditPageSize}
+              auditTotalCount={auditTotalCount}
             />
           </Suspense>
         )}
