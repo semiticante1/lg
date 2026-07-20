@@ -142,6 +142,19 @@ function App() {
   const [launchTarget, setLaunchTarget] = useState("");
   const [messageModal, setMessageModal] = useState<MessageModalState | null>(null);
   const [showScheduleBuilder, setShowScheduleBuilder] = useState(false);
+
+  const normalizeVolumeValue = (value: string) => {
+    const trimmed = value.trim();
+    if (trimmed === "") return "";
+    const parsed = Number(trimmed);
+    if (Number.isNaN(parsed)) return "";
+    const rounded = Math.round(parsed);
+    return String(Math.min(100, Math.max(0, rounded)));
+  };
+
+  const handleVolumeValueChange = (value: string) => {
+    setVolumeValue(normalizeVolumeValue(value));
+  };
   const [showDiscoveryModal, setShowDiscoveryModal] = useState(false);
   const [discoveredDevices, setDiscoveredDevices] = useState<DiscoveredDevice[]>([]);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
@@ -1134,6 +1147,7 @@ function App() {
       const data = (await response.json()) as { results?: BulkPowerResult[] };
       const results = data.results ?? [];
       const successCount = results.filter((item) => item.poweredOn).length;
+      forcedOffIdsRef.current.clear();
       setStatusMessage(`Poslano WOL svim uređajima. Uspješno upaljeno ${successCount} od ${results.length}.`);
       setTimeout(() => setStatusMessage(""), 4000);
       await refreshAll();
@@ -1451,6 +1465,7 @@ function App() {
 
   const handlePowerOffAll = async () => {
     if (devices.length > 0) {
+      devices.forEach((device) => forcedOffIdsRef.current.add(device.id));
       applyOptimisticPowerOffState(devices.map((device) => device.id));
     }
 
@@ -1714,6 +1729,8 @@ function App() {
 
       const data = (await response.json()) as { results?: Array<{ poweredOn?: boolean }> };
       const count = (data.results ?? []).filter((item) => item.poweredOn).length;
+      const groupDeviceIds = devices.filter((device) => device.groupId === groupId).map((device) => device.id);
+      groupDeviceIds.forEach((id) => forcedOffIdsRef.current.delete(id));
       showMessage("Info", `Poslano paljenje grupe. Uspješno upaljeno ${count} uređaja.`);
       await refreshAll();
     } catch (error) {
@@ -1725,6 +1742,7 @@ function App() {
   const handlePowerOffGroup = async (groupId: number) => {
     const groupDeviceIds = devices.filter((device) => device.groupId === groupId).map((device) => device.id);
     if (groupDeviceIds.length > 0) {
+      groupDeviceIds.forEach((id) => forcedOffIdsRef.current.add(id));
       applyOptimisticPowerOffState(groupDeviceIds);
     }
 
@@ -2009,7 +2027,7 @@ function App() {
               handleMessageConfirm={handleMessageConfirm}
               selectedDeviceHistory={selectedDeviceHistory}
               volumeValue={volumeValue}
-              setVolumeValue={setVolumeValue}
+              setVolumeValue={handleVolumeValueChange}
               launchTarget={launchTarget}
               setLaunchTarget={setLaunchTarget}
               detailTab={detailTab}
