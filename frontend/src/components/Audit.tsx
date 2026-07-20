@@ -170,7 +170,7 @@ export default function Audit({ auditDeviceFilter, setAuditDeviceFilter, auditGr
         </Typography>
         <Pagination
           count={totalPages}
-          page={auditPage - 1}
+          page={auditPage}
           onChange={handlePageChange}
           siblingCount={1}
           boundaryCount={1}
