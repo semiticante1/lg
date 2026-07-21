@@ -197,9 +197,16 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
           </Typography>
           <Chip
             label={`${healthScore}%`}
-            color={healthStatus === 'excellent' ? 'success' : healthStatus === 'good' ? 'info' : healthStatus === 'warning' ? 'warning' : 'error'}
+            color={healthStatus === 'excellent' ? 'success' : healthStatus === 'good' ? 'info' : healthStatus === 'warning' ? 'warning' : 'default'}
             variant="filled"
-            sx={{ fontSize: '1rem', height: 32 }}
+            sx={{ 
+              fontSize: '1rem', 
+              height: 32,
+              ...(healthStatus === 'critical' && {
+                backgroundColor: offlineColor,
+                color: 'white',
+              }),
+            }}
           />
         </Box>
         <LinearProgress
@@ -273,7 +280,7 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
                 mb: 2,
                 backgroundColor: 'action.disabledBackground',
                 '& .MuiLinearProgress-bar': {
-                  backgroundColor: 'error.main',
+                  backgroundColor: offlineColor,
                 },
               }}
             />
