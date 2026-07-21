@@ -154,7 +154,7 @@ export default function AppLayout({
           </IconButton>
 
           <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: 600 }}>
-            Herceg TV Control
+            Herceg TV Kontrola
           </Typography>
 
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
