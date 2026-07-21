@@ -64,11 +64,11 @@ export default function AppLayout({
   };
 
   const navigationItems = [
-    { label: 'Dashboard', path: '/', icon: DashboardIcon },
-    { label: 'Devices', path: '/devices', icon: TvIcon },
-    { label: 'Groups', path: '/groups', icon: PeopleIcon },
-    { label: 'Audit Log', path: '/audit', icon: DescriptionIcon },
-    { label: 'Settings', path: '/settings', icon: SettingsIcon },
+    { label: 'Početna', path: '/', icon: DashboardIcon },
+    { label: 'Uređaji', path: '/devices', icon: TvIcon },
+    { label: 'Grupe', path: '/groups', icon: PeopleIcon },
+    { label: 'Revizija', path: '/audit', icon: DescriptionIcon },
+    { label: 'Postavke', path: '/settings', icon: SettingsIcon },
   ];
 
   const drawer = (

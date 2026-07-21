@@ -211,7 +211,8 @@ const Devices: FC<Props> = (props) => {
   }, [filteredDevices.length, search, groupFilter, statusFilter, powerFilter, activityFilter, registrationFrom, registrationTo]);
 
   const totalDevicePages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));
-  const paginatedDevices = filteredDevices.slice((devicePage - 1) * pageSize, devicePage * pageSize);
+  const currentPage = Math.max(1, Math.min(devicePage, totalDevicePages));
+  const paginatedDevices = filteredDevices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -555,8 +556,8 @@ const Devices: FC<Props> = (props) => {
         </Typography>
         <Pagination
           count={totalDevicePages}
-          page={devicePage - 1}
-          onChange={(_event, value) => setDevicePage(value)}
+          page={currentPage}
+          onChange={(_event, value) => setDevicePage(Math.max(1, Math.min(totalDevicePages, value)))}
           siblingCount={1}
           boundaryCount={1}
           color="primary"

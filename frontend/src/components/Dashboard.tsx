@@ -301,6 +301,7 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
               gap: 3,
               alignItems: 'center',
               justifyContent: 'center',
+              width: '100%',
             }}
           >
             {/* Donut Chart */}
@@ -371,9 +372,12 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
           </Typography>
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(4, 1fr)' },
+              display: 'flex',
+              flexWrap: 'wrap',
               gap: 3,
+              justifyContent: 'center',
+              alignItems: 'flex-start',
+              width: '100%',
             }}
           >
             {groupStatusSummary.slice(0, 4).map((group) => {

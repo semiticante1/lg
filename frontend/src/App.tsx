@@ -169,6 +169,7 @@ function App() {
   const diagnosticsAlertCountRef = useRef(0);
   const discoveryInitiatedRef = useRef(false);
   const forcedOffIdsRef = useRef<Set<number>>(new Set());
+  const confirmedOnAfterForcedOffRef = useRef<Set<number>>(new Set());
   const devicesRef = useRef<Device[]>([]);
   const refreshAllRef = useRef<() => Promise<void>>(async () => {});
   const loadDevicesRef = useRef<() => Promise<void>>(async () => {});
@@ -225,13 +226,21 @@ function App() {
     let resolved: "On" | "Off" = normalizedPower === "on" ? "On" : "Off";
 
     if (forcedOffIdsRef.current.has(incoming.id)) {
-      const normalizedStatus = String(incoming.status || fallback?.status || "").toLowerCase();
-      const confirmedBackOn = resolved === "On" && normalizedStatus === "online";
-      if (confirmedBackOn) {
-        forcedOffIdsRef.current.delete(incoming.id);
-      } else {
-        resolved = "Off";
+      if (resolved === "On") {
+        const normalizedStatus = String(incoming.status || fallback?.status || "").toLowerCase();
+        const confirmedBackOn = normalizedStatus === "online";
+        if (confirmedOnAfterForcedOffRef.current.has(incoming.id)) {
+          forcedOffIdsRef.current.delete(incoming.id);
+          confirmedOnAfterForcedOffRef.current.delete(incoming.id);
+          return "On";
+        }
+        if (confirmedBackOn) {
+          confirmedOnAfterForcedOffRef.current.add(incoming.id);
+        }
+        return "Off";
       }
+      confirmedOnAfterForcedOffRef.current.delete(incoming.id);
+      return "Off";
     }
 
     return resolved;
@@ -1162,8 +1171,7 @@ function App() {
     const device = devices.find((d) => d.id === id);
     if (device) {
       forcedOffIdsRef.current.add(id);
-      applyOptimisticPowerOffState([id]);
-      recordDeviceEvent({ ...device, powerState: "Off" }, "Manual power off requested");
+        confirmedOnAfterForcedOffRef.current.delete(id);
       setStatusMessage("Zahtjev za gašenje poslan (status ažuriran lokalno).");
       setTimeout(() => setStatusMessage(""), 3000);
     }
@@ -1207,6 +1215,7 @@ function App() {
     showToast("info", "Uključivanje", "Šaljem WoL paket za paljenje TV-a...");
     // Optimistic UI update: mark device as On immediately
     forcedOffIdsRef.current.delete(id);
+    confirmedOnAfterForcedOffRef.current.delete(id);
     const device = devices.find((d) => d.id === id);
     if (device) {
       setDevices((prev) =>
