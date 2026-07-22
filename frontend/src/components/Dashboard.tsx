@@ -57,6 +57,15 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
   const criticalOfflineDevices = devices.filter((device) => device.status === "Offline").slice(0, 3);
   const hasCritical = offlineCount > 0;
 
+  const firstGroup = groupStatusSummary[0];
+  const firstGroupHealthPercent = firstGroup && firstGroup.deviceCount ? (firstGroup.onlineCount / firstGroup.deviceCount) * 100 : 0;
+  const firstGroupHealthColor =
+    firstGroupHealthPercent > 75
+      ? 'success.main'
+      : firstGroupHealthPercent > 40
+      ? 'warning.main'
+      : 'error.main';
+
   const healthColor =
     healthStatus === 'excellent'
       ? 'success.main'
@@ -66,9 +75,11 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
       ? 'warning.main'
       : 'error.main';
 
+  const deviceLabel = devices.length === 1 ? 'uređaj' : 'uređaja';
+
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Typography variant="h4" sx={{ mb: 4, fontWeight: 700 }}>
+    <Container maxWidth="xl" sx={{ py: 3 }}>
+      <Typography variant="h4" sx={{ mb: 3, fontWeight: 700, letterSpacing: '0.01em' }}>
         Početna
       </Typography>
       
@@ -76,21 +87,23 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
       <Box
         sx={{
           display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)', lg: 'repeat(5, 1fr)' },
-          gap: 2,
-          mb: 4,
+          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))', md: 'repeat(auto-fit, minmax(180px, 1fr))' },
+          gridAutoRows: 'minmax(96px, auto)',
+          gap: 1.25,
+          mb: 3,
+          alignItems: 'stretch',
         }}
       >
         {/* Total Devices Card */}
         <Card sx={{ boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Ukupno uređaja
               </Typography>
-              <Typography sx={{ fontSize: '1.5rem' }}>📦</Typography>
+              <Typography sx={{ fontSize: '1.2rem' }}>📦</Typography>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
               {devices.length}
             </Typography>
             <Typography variant="caption" color="textSecondary">
@@ -101,14 +114,14 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
 
         {/* Online Devices Card */}
         <Card sx={{ boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Na mreži
               </Typography>
-              <Typography sx={{ fontSize: '1.5rem' }}>✅</Typography>
+              <Typography sx={{ fontSize: '1.2rem' }}>✅</Typography>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: 'success.main' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, color: 'success.main' }}>
               {onlineCount}
             </Typography>
             <Typography variant="caption" color="textSecondary">
@@ -119,14 +132,14 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
 
         {/* Offline Devices Card */}
         <Card sx={{ boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Van mreže
               </Typography>
-              <Typography sx={{ fontSize: '1.5rem' }}>⛔</Typography>
+              <Typography sx={{ fontSize: '1.2rem' }}>⛔</Typography>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: 'error.main' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, color: 'error.main' }}>
               {offlineCount}
             </Typography>
             <Typography variant="caption" color="textSecondary">
@@ -137,14 +150,14 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
 
         {/* Powered On Card */}
         <Card sx={{ boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Uključeno
               </Typography>
-              <Typography sx={{ fontSize: '1.5rem' }}>⚡</Typography>
+              <Typography sx={{ fontSize: '1.2rem' }}>⚡</Typography>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: 'warning.main' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, color: 'warning.main' }}>
               {poweredOnCount}
             </Typography>
             <Typography variant="caption" color="textSecondary">
@@ -155,14 +168,14 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
 
         {/* Selected Card */}
         <Card sx={{ boxShadow: 1, '&:hover': { boxShadow: 3 } }}>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1.5 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                 Odabrano
               </Typography>
-              <Typography sx={{ fontSize: '1.5rem' }}>🎯</Typography>
+              <Typography sx={{ fontSize: '1.2rem' }}>🎯</Typography>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 700, mb: 1, color: 'info.main' }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, color: 'info.main' }}>
               {selectedCount}
             </Typography>
             <Typography variant="caption" color="textSecondary">
@@ -171,16 +184,21 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
           </CardContent>
         </Card>
       </Box>
-      {/* Critical Offline Alert */}
+
       {hasCritical && (
-        <Alert severity="error" sx={{ mb: 4 }}>
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 1 }}>
             <Typography sx={{ fontSize: '1.25rem' }}>⚠️</Typography>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-              UPOZORENJE - Kritični uređaji offline
-            </Typography>
+            <Box>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Kritični uređaji offline
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                Pogledaj hitno nedostupne uređaje i interveniraj.
+              </Typography>
+            </Box>
           </Box>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <Box sx={{ display: 'grid', gap: 0.5 }}>
             {criticalOfflineDevices.map((device) => (
               <Typography key={device.id} variant="body2">
                 • {device.name} ({device.ip})
@@ -189,345 +207,306 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
           </Box>
         </Alert>
       )}
-      {/* Network Health Section */}
-      <Paper sx={{ p: 3, mb: 4, bgcolor: 'background.paper' }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 2, mb: 3, alignItems: 'flex-start' }}>
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
             Zdravlje mreže
           </Typography>
-          <Chip
-            label={`${healthScore}%`}
-            color={healthStatus === 'excellent' ? 'success' : healthStatus === 'good' ? 'info' : healthStatus === 'warning' ? 'warning' : 'default'}
-            variant="filled"
-            sx={{ 
-              fontSize: '1rem', 
-              height: 32,
-              ...(healthStatus === 'critical' && {
-                backgroundColor: offlineColor,
-                color: 'white',
-              }),
-            }}
-          />
-        </Box>
-        <LinearProgress
-          variant="determinate"
-          value={healthScore}
-          sx={{
-            height: 12,
-            borderRadius: 6,
-            mb: 2,
-            backgroundColor: 'action.disabledBackground',
-            '& .MuiLinearProgress-bar': {
-              borderRadius: 6,
-              backgroundColor: healthColor,
-            },
-          }}
-        />
-        <Typography variant="body2" color="textSecondary">
-          {healthStatus === 'excellent' && '✓ Mreža je u odličnom stanju! Svi uređaji su dostupni.'}
-          {healthStatus === 'good' && '✓ Mreža je u dobrom stanju. Većina uređaja je dostupna.'}
-          {healthStatus === 'warning' && '⚠ Mreža zahtjeva pažnju. Nekoliko uređaja je van mreže.'}
-          {healthStatus === 'critical' && '✗ Mreža je u kritičnom stanju! Mnogi uređaji su van mreže.'}
-        </Typography>
-      </Paper>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '140px 1fr' }, gap: 2, alignItems: 'center' }}>
+            <Box sx={{ p: 2, bgcolor: 'action.hover', borderRadius: 2, textAlign: 'center' }}>
+              <Typography variant="h3" sx={{ fontWeight: 700, color: healthColor }}>
+                {healthScore}%
+              </Typography>
+              <Typography variant="caption" color="textSecondary">
+                {healthStatus === 'excellent'
+                  ? 'Odlično'
+                  : healthStatus === 'good'
+                  ? 'Dobro'
+                  : healthStatus === 'warning'
+                  ? 'Upozorenje'
+                  : 'Kritično'}
+              </Typography>
+            </Box>
+            <Box>
+              <LinearProgress
+                variant="determinate"
+                value={healthScore}
+                sx={{
+                  height: 12,
+                  borderRadius: 6,
+                  mb: 2,
+                  backgroundColor: 'action.disabledBackground',
+                  '& .MuiLinearProgress-bar': {
+                    borderRadius: 6,
+                    backgroundColor: healthColor,
+                  },
+                }}
+              />
+              <Typography variant="body2" color="textSecondary">
+                {healthStatus === 'excellent' && 'Mreža je stabilna i svi uređaji su dostupni.'}
+                {healthStatus === 'good' && 'Većina uređaja radi, ali pazi na manje probleme.'}
+                {healthStatus === 'warning' && 'Nekoliko uređaja je van mreže, prati situaciju.'}
+                {healthStatus === 'critical' && 'Velik broj uređaja je offline, potreban je hitan pregled.'}
+              </Typography>
+            </Box>
+          </Box>
 
-      {/* Distribution Charts */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-          gap: 2,
-          mb: 4,
-        }}
-      >
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-              Uređaji na mreži
-            </Typography>
-            <LinearProgress
-              variant="determinate"
-              value={devices.length ? (onlineCount / devices.length) * 100 : 0}
-              sx={{
-                height: 10,
-                borderRadius: 5,
-                mb: 2,
-                backgroundColor: 'action.disabledBackground',
-                '& .MuiLinearProgress-bar': {
-                  backgroundColor: 'success.main',
-                },
-              }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 2 }}>
+            <Paper sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Na mreži
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: 'success.main' }}>
                 {onlineCount}
               </Typography>
               <Typography variant="caption" color="textSecondary">
-                od {devices.length} ukupno
+                {devices.length ? Math.round((onlineCount / devices.length) * 100) : 0}%
               </Typography>
-            </Box>
-          </Paper>
-
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-              Uređaji van mreže
-            </Typography>
-            <LinearProgress
-              variant="determinate"
-              value={devices.length ? (offlineCount / devices.length) * 100 : 0}
-              sx={{
-                height: 10,
-                borderRadius: 5,
-                mb: 2,
-                backgroundColor: 'action.disabledBackground',
-                '& .MuiLinearProgress-bar': {
-                  backgroundColor: offlineColor,
-                },
-              }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            </Paper>
+            <Paper sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
+                Van mreže
+              </Typography>
+              <Typography variant="h5" sx={{ fontWeight: 700, color: 'error.main' }}>
                 {offlineCount}
               </Typography>
               <Typography variant="caption" color="textSecondary">
-                od {devices.length} ukupno
+                {devices.length ? Math.round((offlineCount / devices.length) * 100) : 0}%
               </Typography>
-            </Box>
-          </Paper>
-      </Box>
+            </Paper>
+          </Box>
 
-      {/* Device Status Distribution */}
-      {devices.length > 0 && (
-        <Paper sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-            Distribuacija statusa uređaja
-          </Typography>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: { xs: 'column', md: 'row' },
-              gap: 3,
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-            }}
-          >
-            {/* Donut Chart */}
-            <Box sx={{ position: 'relative', width: 180, height: 180 }}>
-              <Box
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  borderRadius: '50%',
-                  background: `conic-gradient(
-                    ${onlineColor} 0deg ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg,
-                    ${offlineColor} ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg 360deg
-                  )`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                }}
-              >
+          {devices.length > 0 && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'auto 1fr' }, gap: 2, alignItems: 'center', mt: 3 }}>
+              <Box sx={{ position: 'relative', width: 180, height: 180, mx: 'auto' }}>
                 <Box
                   sx={{
-                    width: 140,
-                    height: 140,
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    background: `conic-gradient(
+                      ${onlineColor} 0deg ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg,
+                      ${offlineColor} ${devices.length ? (onlineCount / devices.length) * 360 : 0}deg 360deg
+                    )`,
+                  }}
+                />
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    inset: '16px',
                     borderRadius: '50%',
                     bgcolor: 'background.paper',
                     display: 'flex',
-                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    gap: 1,
                     border: '1px solid',
                     borderColor: 'divider',
+                    px: 1,
                   }}
                 >
-                  <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, whiteSpace: 'nowrap' }}>
                     {devices.length}
                   </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    uređaja
+                  <Typography variant="caption" color="textSecondary" sx={{ whiteSpace: 'nowrap' }}>
+                    {deviceLabel}
                   </Typography>
                 </Box>
               </Box>
-            </Box>
-
-            {/* Legend */}
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: onlineColor }} />
-                <Typography variant="body2">
-                  Na mreži ({onlineCount})
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                <Box sx={{ width: 16, height: 16, borderRadius: '50%', bgcolor: offlineColor }} />
-                <Typography variant="body2">
-                  Van mreže ({offlineCount})
+              <Box sx={{ display: 'grid', gap: 1.25 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: onlineColor }} />
+                  <Typography variant="body2">Na mreži ({onlineCount})</Typography>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: offlineColor }} />
+                  <Typography variant="body2">Van mreže ({offlineCount})</Typography>
+                </Box>
+                <Typography variant="caption" color="textSecondary">
+                  Brzi pregled distribucije po statusu.
                 </Typography>
               </Box>
             </Box>
-          </Box>
+          )}
         </Paper>
-      )}
 
-      {/* Group Health Status */}
-      {groupStatusSummary.length > 0 && (
-        <Paper sx={{ p: 3, mb: 4 }}>
-          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+        <Paper sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
             Zdravlje grupa po dostupnosti
           </Typography>
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 3,
-              justifyContent: 'center',
-              alignItems: 'flex-start',
-              width: '100%',
-            }}
-          >
-            {groupStatusSummary.slice(0, 4).map((group) => {
-              const healthPercent = group.deviceCount ? (group.onlineCount / group.deviceCount) * 100 : 0;
-              return (
-                <Box key={group.id} sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                    <Box sx={{ position: 'relative', width: 120, height: 120, mb: 1.5 }}>
-                      <CircularProgress
-                        variant="determinate"
-                        value={100}
-                        size={120}
-                        thickness={4}
-                        sx={{
-                          color: 'action.disabledBackground',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                        }}
-                      />
-                      <CircularProgress
-                        variant="determinate"
-                        value={healthPercent}
-                        size={120}
-                        thickness={4}
-                        sx={{
-                          color:
-                            healthPercent > 50
-                              ? 'success.main'
-                              : healthPercent > 20
-                              ? 'warning.main'
-                              : 'error.main',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                        }}
-                      />
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          top: 0,
-                          right: 0,
-                          bottom: 0,
-                          left: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          textAlign: 'center',
-                          zIndex: 1,
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1 }}>
-                          {Math.round(healthPercent)}%
-                        </Typography>
-                      </Box>
-                    </Box>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                      {group.name}
-                    </Typography>
-                    <Typography variant="caption" color="textSecondary">
-                      {group.onlineCount}/{group.deviceCount} dostupnih
+          <Typography variant="body2" color="textSecondary">
+            Pregled dostupnosti najvažnijih grupa.
+          </Typography>
+          {groupStatusSummary.length === 0 ? (
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+              Nema podataka o grupama.
+            </Typography>
+          ) : (
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', md: 'auto 1fr' },
+                gap: 3,
+                mt: 3,
+                alignItems: 'center',
+              }}
+            >
+              <Box sx={{ width: 220, height: 220, mx: 'auto' }}>
+                <Box
+                  sx={{
+                    position: 'relative',
+                    width: '100%',
+                    height: '100%',
+                  }}
+                >
+                  <CircularProgress
+                    variant="determinate"
+                    value={100}
+                    size={220}
+                    thickness={4}
+                    sx={{
+                      color: 'action.disabledBackground',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                    }}
+                  />
+                  <CircularProgress
+                    variant="determinate"
+                    value={firstGroupHealthPercent}
+                    size={220}
+                    thickness={4}
+                    sx={{
+                      color: firstGroupHealthColor,
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                    }}
+                  />
+                  <Box
+                    sx={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                      {firstGroup ? `${Math.round(firstGroupHealthPercent)}%` : '0%'}
                     </Typography>
                   </Box>
-              );
-            })}
-          </Box>
-        </Paper>
-      )}
-
-      {/* Dashboard Panels */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
-          gap: 3,
-        }}
-      >
-        {/* Group Health Tracking */}
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-              Grupe koje trebaju pažnju
-            </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-              Prati grupe prema udjelu offline uređaja i brzo vidi gdje treba intervenirati.
-            </Typography>
-            {groupHealth.length === 0 ? (
-              <Typography variant="body2" color="textSecondary" sx={{ p: 2, textAlign: 'center' }}>
-                Nema dovoljno podataka za grupnu analizu.
-              </Typography>
-            ) : (
-              <List disablePadding>
-                {groupHealth.map((group) => (
-                  <ListItem key={group.id} disableGutters sx={{ mb: 1, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                    <Box sx={{ width: '100%' }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                </Box>
+              </Box>
+              <Box sx={{ display: 'grid', gap: 1.5 }}>
+                {groupStatusSummary.slice(0, 4).map((group) => {
+                  const healthPercent = group.deviceCount ? (group.onlineCount / group.deviceCount) * 100 : 0;
+                  const color =
+                    healthPercent > 75
+                      ? 'success.main'
+                      : healthPercent > 40
+                      ? 'warning.main'
+                      : 'error.main';
+                  return (
+                    <Box
+                      key={group.id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        bgcolor: 'action.hover',
+                        borderRadius: 2,
+                        p: 2,
+                      }}
+                    >
+                      <Box>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                           {group.name}
                         </Typography>
-                        <Chip
-                          label={`${group.offlineCount}/${group.deviceCount} offline`}
-                          size="small"
-                          color={group.offlineRatio > 0.5 ? 'error' : group.offlineRatio > 0.2 ? 'warning' : 'success'}
-                          variant="outlined"
-                        />
+                        <Typography variant="caption" color="textSecondary">
+                          {group.onlineCount}/{group.deviceCount}
+                        </Typography>
                       </Box>
-                      <LinearProgress
-                        variant="determinate"
-                        value={group.deviceCount ? Math.round(group.offlineRatio * 100) : 0}
-                        sx={{
-                          height: 6,
-                          borderRadius: 3,
-                          backgroundColor: 'action.disabledBackground',
-                          '& .MuiLinearProgress-bar': {
-                            backgroundColor: group.offlineRatio > 0.5 ? 'error.main' : group.offlineRatio > 0.2 ? 'warning.main' : 'success.main',
-                          },
-                        }}
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color }}>
+                        {Math.round(healthPercent)}%
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
+        </Paper>
+      </Box>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 3 }}>
+        <Paper sx={{ p: 3, height: '100%' }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+            Grupe koje trebaju pažnju
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Prati udio offline uređaja u grupama i reagiraj gdje je najkritičnije.
+          </Typography>
+          {groupHealth.length === 0 ? (
+            <Typography variant="body2" color="textSecondary" sx={{ p: 2, textAlign: 'center' }}>
+              Nema dovoljnih podataka za grupnu analizu.
+            </Typography>
+          ) : (
+            <List disablePadding>
+              {groupHealth.map((group) => (
+                <ListItem key={group.id} disableGutters sx={{ mb: 1, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                  <Box sx={{ width: '100%' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {group.name}
+                      </Typography>
+                      <Chip
+                        label={`${group.offlineCount}/${group.deviceCount} offline`}
+                        size="small"
+                        color={group.offlineRatio > 0.5 ? 'error' : group.offlineRatio > 0.2 ? 'warning' : 'success'}
+                        variant="outlined"
                       />
                     </Box>
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </Paper>
-
-        {/* Operational Insights */}
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
-              Operativni uvidi
-            </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-              Kratki pregled najvažnijih stanja i preporuka za akciju.
-            </Typography>
-            <List disablePadding>
-              {dashboardInsights.map((insight, index) => (
-                <ListItem key={index} disableGutters sx={{ mb: 1, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {insight}
-                  </Typography>
+                    <LinearProgress
+                      variant="determinate"
+                      value={group.deviceCount ? Math.round(group.offlineRatio * 100) : 0}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: 'action.disabledBackground',
+                        '& .MuiLinearProgress-bar': {
+                          backgroundColor: group.offlineRatio > 0.5 ? 'error.main' : group.offlineRatio > 0.2 ? 'warning.main' : 'success.main',
+                        },
+                      }}
+                    />
+                  </Box>
                 </ListItem>
               ))}
             </List>
-          </Paper>
+          )}
+        </Paper>
+
+        <Paper sx={{ p: 3, height: '100%' }}>
+          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+            Operativni uvidi
+          </Typography>
+          <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+            Brze preporuke i sažetak ključnih promjena prilikom nadzora.
+          </Typography>
+          <List disablePadding>
+            {dashboardInsights.map((insight, index) => (
+              <ListItem key={index} disableGutters sx={{ mb: 1, pb: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {insight}
+                </Typography>
+              </ListItem>
+            ))}
+          </List>
+        </Paper>
       </Box>
+
     </Container>
   );
 }
