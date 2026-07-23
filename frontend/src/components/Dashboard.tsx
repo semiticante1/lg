@@ -253,7 +253,18 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5, mt: 2 }}>
-            <Paper sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+            <Paper
+              sx={{
+                p: 2,
+                bgcolor: (theme) =>
+                  theme.palette.mode === 'light' ? theme.palette.grey[100] : 'background.paper',
+                border: (theme) =>
+                  theme.palette.mode === 'light' ? '2px solid' : '1px solid',
+                borderColor: (theme) =>
+                  theme.palette.mode === 'light' ? theme.palette.grey[500] : 'divider',
+                borderRadius: 2,
+              }}
+            >
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 Na mreži
               </Typography>
@@ -264,7 +275,18 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
                 {devices.length ? Math.round((onlineCount / devices.length) * 100) : 0}%
               </Typography>
             </Paper>
-            <Paper sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+            <Paper
+              sx={{
+                p: 2,
+                bgcolor: (theme) =>
+                  theme.palette.mode === 'light' ? theme.palette.grey[100] : 'background.paper',
+                border: (theme) =>
+                  theme.palette.mode === 'light' ? '2px solid' : '1px solid',
+                borderColor: (theme) =>
+                  theme.palette.mode === 'light' ? theme.palette.grey[500] : 'divider',
+                borderRadius: 2,
+              }}
+            >
               <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
                 Van mreže
               </Typography>
@@ -331,25 +353,26 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
           )}
         </Paper>
 
-        <Paper sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+        <Paper sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <Typography variant="h6" sx={{ mb: 1, fontWeight: 600, textAlign: 'center' }}>
             Zdravlje grupa po dostupnosti
           </Typography>
-          <Typography variant="body2" color="textSecondary">
+          <Typography variant="body2" color="textSecondary" sx={{ textAlign: 'center' }}>
             Pregled dostupnosti najvažnijih grupa.
           </Typography>
           {groupStatusSummary.length === 0 ? (
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }}>
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 2, textAlign: 'center' }}>
               Nema podataka o grupama.
             </Typography>
           ) : (
             <Box
               sx={{
-                display: 'grid',
-                gridTemplateColumns: { xs: '1fr', md: 'auto 1fr' },
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
                 gap: 3,
                 mt: 3,
-                alignItems: 'center',
+                width: '100%',
               }}
             >
               <Box sx={{ width: 220, height: 220, mx: 'auto' }}>
@@ -400,7 +423,7 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
                   </Box>
                 </Box>
               </Box>
-              <Box sx={{ display: 'grid', gap: 1.5 }}>
+              <Box sx={{ display: 'grid', gap: 1.5, width: '100%', maxWidth: 420, mx: 'auto' }}>
                 {groupStatusSummary.slice(0, 4).map((group) => {
                   const healthPercent = group.deviceCount ? (group.onlineCount / group.deviceCount) * 100 : 0;
                   const color =
@@ -416,8 +439,16 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        bgcolor: 'action.hover',
+                        bgcolor: (theme) =>
+                          theme.palette.mode === 'light' ? theme.palette.grey[200] : 'action.hover',
                         borderRadius: 2,
+                        border: '1px solid',
+                        borderColor: (theme) =>
+                          theme.palette.mode === 'light' ? theme.palette.grey[500] : 'divider',
+                        boxShadow: (theme) =>
+                          theme.palette.mode === 'light'
+                            ? '0 1px 4px rgba(0, 0, 0, 0.08)'
+                            : 'none',
                         p: 2,
                       }}
                     >
@@ -442,7 +473,19 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
       </Box>
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 3 }}>
-        <Paper sx={{ p: 3, height: '100%' }}>
+        <Paper
+          sx={{
+            p: 3,
+            height: '100%',
+            bgcolor: (theme) =>
+              theme.palette.mode === 'light' ? theme.palette.grey[100] : 'background.paper',
+            border: (theme) =>
+              theme.palette.mode === 'light' ? '1px solid' : '1px solid',
+            borderColor: (theme) =>
+              theme.palette.mode === 'light' ? theme.palette.grey[500] : 'divider',
+            borderRadius: 2,
+          }}
+        >
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
             Grupe koje trebaju pažnju
           </Typography>
@@ -488,7 +531,19 @@ export default function Dashboard({ devices, groupStatusSummary, recentDeviceEve
           )}
         </Paper>
 
-        <Paper sx={{ p: 3, height: '100%' }}>
+        <Paper
+          sx={{
+            p: 3,
+            height: '100%',
+            bgcolor: (theme) =>
+              theme.palette.mode === 'light' ? theme.palette.grey[100] : 'background.paper',
+            border: (theme) =>
+              theme.palette.mode === 'light' ? '1px solid' : '1px solid',
+            borderColor: (theme) =>
+              theme.palette.mode === 'light' ? theme.palette.grey[500] : 'divider',
+            borderRadius: 2,
+          }}
+        >
           <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
             Operativni uvidi
           </Typography>
