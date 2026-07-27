@@ -37,7 +37,7 @@ import EditOutlined from '@mui/icons-material/EditOutlined';
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined';
 import RestartAltOutlined from '@mui/icons-material/RestartAltOutlined';
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined';
-import { useEffect, useState, type FC } from 'react';
+import { useState, type FC } from 'react';
 import type {
   Device,
   DeviceHistoryEntry,
@@ -205,10 +205,6 @@ const Devices: FC<Props> = (props) => {
 
   const [devicePage, setDevicePage] = useState(1);
   const pageSize = 10;
-
-  useEffect(() => {
-    setDevicePage(1);
-  }, [filteredDevices.length, search, groupFilter, statusFilter, powerFilter, activityFilter, registrationFrom, registrationTo]);
 
   const totalDevicePages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));
   const currentPage = Math.max(1, Math.min(devicePage, totalDevicePages));
