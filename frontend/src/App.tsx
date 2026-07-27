@@ -2,17 +2,13 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import Alert from '@mui/material/Alert';
-import Snackbar from '@mui/material/Snackbar';
-import CircularProgress from '@mui/material/CircularProgress';
 import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import { createAppTheme } from './theme';
+import { useAppTheme } from './hooks/useAppTheme';
 import AppLayout from './components/AppLayout';
-import ScheduleBuilderModal from "./components/ScheduleBuilderModal";
-import DeviceDiscoveryModal from "./components/DeviceDiscoveryModal";
-import DeviceEditorModal from "./components/DeviceEditorModal";
-import ToastContainer from "./components/ToastContainer";
+import PageFallback from './components/PageFallback';
+import AppGlobalUI from './components/AppGlobalUI';
 import type {
   Device,
   AuditLogEntry,
@@ -32,6 +28,7 @@ import {
   isValidIp,
   isValidMac,
 } from "./utils/device";
+import { getActivePage } from "./utils/app";
 import {
   getActionLabel,
   getAvailableActionsForDevice,
@@ -64,22 +61,7 @@ const SettingsPage = lazy(() => import('./components/Settings'));
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const activePage = (() => {
-    switch (location.pathname) {
-      case "/":
-        return "dashboard";
-      case "/devices":
-        return "devices";
-      case "/groups":
-        return "groups";
-      case "/audit":
-        return "audit";
-      case "/settings":
-        return "settings";
-      default:
-        return "notfound";
-    }
-  })();
+  const activePage = getActivePage(location.pathname);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deviceName, setDeviceName] = useState("");
@@ -114,6 +96,7 @@ function App() {
   const [backendUrl, setBackendUrl] = useState("http://localhost:5000");
   const [schedulerOn, setSchedulerOn] = useState(true);
   const [statusMessage, setStatusMessage] = useState("");
+  const { theme, toggleTheme } = useAppTheme("dark");
   const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
@@ -124,15 +107,6 @@ function App() {
   const [auditTotalCount, setAuditTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [lastRefresh, setLastRefresh] = useState("");
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
-    try {
-      const saved = window.localStorage.getItem("appTheme");
-      if (saved === "dark" || saved === "light") return saved as "dark" | "light";
-    } catch {
-      // ignore storage errors
-    }
-    return "dark";
-  });
   const initialLoadRef = useRef(false);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -181,41 +155,6 @@ function App() {
 
   const baseUrl = backendUrl.replace(/\/$/, "");
   devicesRef.current = devices;
-
-  // theme is initialized synchronously from localStorage above
-
-  useEffect(() => {
-    window.localStorage.setItem("appTheme", theme);
-  }, [theme]);
-
-  // Keep theme class on body so CSS variables apply globally (body uses --body-bg)
-  useEffect(() => {
-    try {
-      document.body.classList.remove('theme-light', 'theme-dark');
-      document.body.classList.add(`theme-${theme}`);
-    } catch {
-      // ignore DOM/classList errors
-    }
-    return () => {
-      try {
-        document.body.classList.remove('theme-light', 'theme-dark');
-      } catch {
-        // ignore DOM/classList errors
-      }
-    };
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme((current) => {
-      const next = current === "light" ? "dark" : "light";
-      try {
-        window.localStorage.setItem("appTheme", next);
-      } catch {
-        // ignore storage errors
-      }
-      return next;
-    });
-  };
 
   const resolvePowerStateWithForcedOff = (
     incoming: { id: number; powerState?: string; power_state?: string; status?: string },
@@ -1894,11 +1833,7 @@ function App() {
   });
 
   const muiTheme = createAppTheme(theme);
-  const pageFallback = (
-    <Container maxWidth="sm" sx={{ py: 6 }}>
-      <Typography variant="body1" color="text.secondary">Učitavanje stranice...</Typography>
-    </Container>
-  );
+  const pageFallback = <PageFallback />;
 
   return (
     <ThemeProvider theme={muiTheme}>
@@ -2078,8 +2013,10 @@ function App() {
           </Container>
         )}
 
-      <DeviceEditorModal
-        isOpen={showModal}
+      <AppGlobalUI
+        loading={loading}
+        statusMessage={statusMessage}
+        showModal={showModal}
         editingId={editingId}
         deviceName={deviceName}
         deviceIp={deviceIp}
@@ -2092,60 +2029,30 @@ function App() {
         onDeviceMacChange={setDeviceMac}
         onDeviceBrandChange={setDeviceBrand}
         onModalGroupIdChange={setModalGroupId}
-        onClose={() => setShowModal(false)}
+        onModalClose={() => setShowModal(false)}
         onOpenDiscovery={() => {
           setShowModal(false);
           setShowDiscoveryModal(true);
         }}
         onSave={handleSave}
-      />
-
-      <Snackbar
-        open={loading}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{ mb: { xs: 1.5, sm: 2 } }}
-      >
-        <Alert
-          severity="info"
-          icon={<CircularProgress size={16} color="inherit" />}
-          sx={{ width: '100%' }}
-        >
-          Osvježavanje...
-        </Alert>
-      </Snackbar>
-      <Snackbar
-        open={Boolean(statusMessage)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{ mb: { xs: loading ? 9 : 1.5, sm: loading ? 10 : 2 } }}
-      >
-        <Alert severity="info" sx={{ width: '100%' }}>
-          {statusMessage}
-        </Alert>
-      </Snackbar>
-      
-      <DeviceDiscoveryModal
-        isOpen={showDiscoveryModal}
+        showDiscoveryModal={showDiscoveryModal}
         discoveryLoading={discoveryLoading}
         discoveredDevices={discoveredDevices}
         selectedDiscoveredDevices={selectedDiscoveredDevices}
-        onClose={closeDiscoveryModal}
+        onDiscoveryClose={closeDiscoveryModal}
         onRetryDiscovery={handleStartDiscovery}
-        onAddSelected={handleAddDiscoveredDevices}
+        onAddDiscoveredDevices={handleAddDiscoveredDevices}
         onSelectionChange={setSelectedDiscoveredDevices}
+        showScheduleBuilder={showScheduleBuilder}
+        onScheduleBuilderClose={() => setShowScheduleBuilder(false)}
+        onScheduleBuilderSave={handleSaveScheduleBuilder}
+        onScheduleCronChange={setScheduleCron}
+        scheduleCron={scheduleCron}
+        scheduleActionLabel={getActionLabel(scheduleAction)}
+        selectedDeviceName={selectedDevice?.name || "Uređaj"}
+        toastMessages={toastMessages}
+        onRemoveToast={removeToast}
       />
-
-      {/* Schedule Builder Modal */}
-      <ScheduleBuilderModal
-        isOpen={showScheduleBuilder}
-        onClose={() => setShowScheduleBuilder(false)}
-        onSave={handleSaveScheduleBuilder}
-        onCronChange={setScheduleCron}
-        currentCron={scheduleCron}
-        action={getActionLabel(scheduleAction)}
-        deviceName={selectedDevice?.name || "Uređaj"}
-      />
-      
-      <ToastContainer messages={toastMessages} onRemove={removeToast} />
       </AppLayout>
     </ThemeProvider>
   );
