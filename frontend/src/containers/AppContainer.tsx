@@ -129,7 +129,6 @@ export default function AppContainer() {
   const diagnosticsAlertCountRef = useRef(0);
   const discoveryInitiatedRef = useRef(false);
   const forcedOffIdsRef = useRef<Set<number>>(new Set());
-  const confirmedOnAfterForcedOffRef = useRef<Set<number>>(new Set());
   const devicesRef = useRef<Device[]>([]);
   const refreshAllRef = useRef<() => Promise<void>>(async () => {});
   const loadDevicesRef = useRef<() => Promise<void>>(async () => {});
@@ -161,27 +160,18 @@ export default function AppContainer() {
   ) => {
     const rawPower = incoming.powerState || incoming.power_state || fallback?.powerState || "Off";
     const normalizedPower = String(rawPower).toLowerCase();
-    const resolved: "On" | "Off" = normalizedPower === "on" ? "On" : "Off";
+    const normalizedStatus = String(incoming.status || fallback?.status || "").toLowerCase();
+    const confirmedBackOn = normalizedPower === "on" && normalizedStatus === "online";
 
     if (forcedOffIdsRef.current.has(incoming.id)) {
-      if (resolved === "On") {
-        const normalizedStatus = String(incoming.status || fallback?.status || "").toLowerCase();
-        const confirmedBackOn = normalizedStatus === "online";
-        if (confirmedOnAfterForcedOffRef.current.has(incoming.id)) {
-          forcedOffIdsRef.current.delete(incoming.id);
-          confirmedOnAfterForcedOffRef.current.delete(incoming.id);
-          return "On";
-        }
-        if (confirmedBackOn) {
-          confirmedOnAfterForcedOffRef.current.add(incoming.id);
-        }
-        return "Off";
+      if (confirmedBackOn) {
+        forcedOffIdsRef.current.delete(incoming.id);
+        return "On";
       }
-      confirmedOnAfterForcedOffRef.current.delete(incoming.id);
       return "Off";
     }
 
-    return resolved;
+    return normalizedPower === "on" ? "On" : "Off";
   };
 
   useEffect(() => {
@@ -983,7 +973,6 @@ export default function AppContainer() {
     setSelectedAssignGroupId,
     setShowAssignGroupModal,
     forcedOffIdsRef,
-    confirmedOnAfterForcedOffRef,
   });
 
   const closeMessageModal = () => setMessageModal(null);

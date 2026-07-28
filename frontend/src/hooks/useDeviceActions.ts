@@ -44,7 +44,6 @@ export interface UseDeviceActionsOptions {
   setSelectedAssignGroupId: Dispatch<SetStateAction<number | null>>;
   setShowAssignGroupModal: (open: boolean) => void;
   forcedOffIdsRef: RefObject<Set<number>>;
-  confirmedOnAfterForcedOffRef: RefObject<Set<number>>;
 }
 
 export function useDeviceActions({
@@ -71,10 +70,10 @@ export function useDeviceActions({
   setSelectedAssignGroupId,
   setShowAssignGroupModal,
   forcedOffIdsRef,
-  confirmedOnAfterForcedOffRef,
 }: UseDeviceActionsOptions) {
   const applyOptimisticPowerOffState = (ids: number[]) => {
     if (ids.length === 0) return;
+    ids.forEach((id) => forcedOffIdsRef.current.add(id));
     setDevices((prev) =>
       prev.map((device) =>
         ids.includes(device.id) ? { ...device, powerState: "Off", power_state: "Off" } : device
@@ -115,7 +114,10 @@ export function useDeviceActions({
     const device = devices.find((d) => d.id === id);
     if (device) {
       forcedOffIdsRef.current.add(id);
-      confirmedOnAfterForcedOffRef.current.delete(id);
+      setDevices((prev) =>
+        prev.map((d) => (d.id === id ? { ...d, powerState: "Off", power_state: "Off" } : d))
+      );
+      recordDeviceEvent({ ...device, powerState: "Off" }, "Manual power off requested");
       setStatusMessage("Zahtjev za gašenje poslan (status ažuriran lokalno).");
       setTimeout(() => setStatusMessage(""), 3000);
     }
@@ -129,6 +131,7 @@ export function useDeviceActions({
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         const errorMsg = errorData?.reason || errorData?.error || `Greška: ${response.statusText}`;
+        forcedOffIdsRef.current.delete(id);
         showMessage("Greška pri gašenju", errorMsg);
         await refreshAll();
         return;
@@ -136,10 +139,12 @@ export function useDeviceActions({
 
       const data = await response.json();
       if (!data.success) {
+        forcedOffIdsRef.current.delete(id);
         showMessage("Gašenje nije uspjelo", data.reason || "Nepoznata greška");
         await refreshAll();
       }
     } catch (error) {
+      forcedOffIdsRef.current.delete(id);
       console.error("Greska pri gašenju uređaja:", error);
       showMessage("Greška", "Greška pri gašenju uređaja.");
       await refreshAll();
@@ -150,6 +155,7 @@ export function useDeviceActions({
     showToast("info", "Uključivanje", "Šaljem WoL paket za paljenje TV-a...");
     const device = devices.find((d) => d.id === id);
     if (device) {
+      forcedOffIdsRef.current.delete(id);
       setDevices((prev) =>
         prev.map((d) => (d.id === id ? { ...d, powerState: "On", power_state: "On" } : d))
       );
