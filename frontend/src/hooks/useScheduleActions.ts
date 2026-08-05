@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import type { Device, DeviceSchedule } from "../types/app";
+import type { Device, DeviceSchedule, ScheduleActionParams, ScheduleActionSequence } from "../types/app";
 import { getAvailableActionsForDevice } from "../utils/schedule";
 
 interface UseScheduleActionsOptions {
@@ -8,7 +8,7 @@ interface UseScheduleActionsOptions {
   selectedDevice: Device | null;
   selectedDeviceId: number | null;
   scheduleAction: string;
-  scheduleSequence: Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>;
+  scheduleSequence: ScheduleActionSequence;
   scheduleDescription: string;
   scheduleEnabled: boolean;
   scheduleTarget: string;
@@ -19,7 +19,7 @@ interface UseScheduleActionsOptions {
   setScheduleTarget: Dispatch<SetStateAction<string>>;
   setScheduleDescription: Dispatch<SetStateAction<string>>;
   setScheduleEnabled: Dispatch<SetStateAction<boolean>>;
-  setScheduleSequence: Dispatch<SetStateAction<Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>>>;
+  setScheduleSequence: Dispatch<SetStateAction<ScheduleActionSequence>>;
   setScheduleUseTime: Dispatch<SetStateAction<boolean>>;
   setScheduleTime: Dispatch<SetStateAction<string>>;
   setEditingScheduleId: Dispatch<SetStateAction<number | null>>;
@@ -74,7 +74,7 @@ export function useScheduleActions(options: UseScheduleActionsOptions) {
   }, [setEditingScheduleId, setScheduleAction, setScheduleCron, setScheduleDescription, setScheduleEnabled, setScheduleSequence, setScheduleTarget, setScheduleTime, setScheduleUseTime]);
 
   const handleEditSchedule = useCallback((schedule: DeviceSchedule) => {
-    const actionParams = (schedule.action_params ?? {}) as Record<string, unknown>;
+    const actionParams = (schedule.action_params ?? {}) as ScheduleActionParams;
     const available = getAvailableActionsForDevice(selectedDevice);
     const supportedAction = available.some((action) => action.value === schedule.action) ? schedule.action : available[0]?.value || "poweron";
     setEditingScheduleId(schedule.id);
@@ -86,7 +86,7 @@ export function useScheduleActions(options: UseScheduleActionsOptions) {
     setDetailTab("schedule");
     try {
       if (schedule.action === "sequence" && Array.isArray(actionParams.sequence)) {
-        setScheduleSequence(actionParams.sequence.map((s) => ({ ...(s as { action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }) })));
+        setScheduleSequence(actionParams.sequence.map((s) => ({ ...(s as ScheduleActionSequence[0]) })));
       } else {
         setScheduleSequence([]);
       }

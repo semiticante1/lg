@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { showTransientStatusMessage } from "../utils/app";
 import type { UseDeviceActionsOptions } from "./useDeviceActions";
 
 export function useDevicePowerActions({
@@ -46,8 +47,11 @@ export function useDevicePowerActions({
       const data = (await response.json()) as { results?: Array<{ poweredOn?: boolean }> };
       const results = data.results ?? [];
       forcedOffIdsRef.current.clear();
-      setStatusMessage(`Poslano WOL svim uređajima. Uspješno upaljeno ${results.filter((item) => item.poweredOn).length} od ${results.length}.`);
-      window.setTimeout(() => setStatusMessage(""), 4000);
+      showTransientStatusMessage(
+        setStatusMessage,
+        `Poslano WOL svim uređajima. Uspješno upaljeno ${results.filter((item) => item.poweredOn).length} od ${results.length}.`,
+        4000
+      );
       await refreshAll();
     } catch (error) {
       console.error("Greska pri paljenju svih TV-a:", error);
@@ -73,8 +77,11 @@ export function useDevicePowerActions({
 
       const data = (await response.json()) as { results?: Array<{ poweredOff?: boolean }> };
       const results = data.results ?? [];
-      setStatusMessage(`Poslano gašenje svim uređajima. Ugašeno ${results.filter((item) => item.poweredOff).length} od ${results.length}.`);
-      window.setTimeout(() => setStatusMessage(""), 4000);
+      showTransientStatusMessage(
+        setStatusMessage,
+        `Poslano gašenje svim uređajima. Ugašeno ${results.filter((item) => item.poweredOff).length} od ${results.length}.`,
+        4000
+      );
       await refreshAll();
     } catch (error) {
       console.error("Greska pri gašenju svih TV-a:", error);
@@ -93,8 +100,7 @@ export function useDevicePowerActions({
           )
         );
         recordDeviceEvent({ ...device, powerState: "Off" }, "Manual power off requested");
-        setStatusMessage("Zahtjev za gašenje poslan (status ažuriran lokalno)." );
-        window.setTimeout(() => setStatusMessage(""), 3000);
+        showTransientStatusMessage(setStatusMessage, "Zahtjev za gašenje poslan (status ažuriran lokalno).", 3000);
       }
 
       try {

@@ -14,13 +14,11 @@ import type {
   Group,
   MessageModalState,
 } from '../types/app';
-import {
-  DeviceDetailsPanel,
-  DeviceDialogs,
-  DeviceSummaryCards,
-  DeviceTable,
-  DevicesToolbar,
-} from './DevicesSections';
+import { DeviceSummaryCards } from './DevicesSections';
+import { DeviceDialogs } from './DeviceDialogs';
+import { DeviceDetailsPanel } from './DeviceDetailsPanel';
+import { DevicesToolbar } from './DevicesToolbar';
+import { DeviceTable } from './DeviceTable';
 
 interface Props {
   devices: Device[];
@@ -225,7 +223,7 @@ const Devices: FC<Props> = (props) => {
             formatPowerText={formatPowerText}
             formatStatusText={formatStatusText}
             handleViewDevice={handleViewDevice}
-            onEditDevice={(device) => {
+            onEditDevice={(device: Device) => {
               setEditingId(device.id);
               setDeviceName(device.name);
               setDeviceIp(device.ip);
@@ -235,7 +233,7 @@ const Devices: FC<Props> = (props) => {
             }}
             handleOpenAuditForDevice={handleOpenAuditForDevice}
             handleRestartDevice={handleRestartDevice}
-            onDeleteDevice={(id) => {
+            onDeleteDevice={(id: number) => {
               setPendingDelete(id);
               setShowDeleteConfirm(true);
             }}

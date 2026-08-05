@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { showTransientStatusMessage } from "../utils/app";
 import type {
   Device,
   DeviceHistoryEntry,
@@ -149,8 +150,7 @@ export function useDeviceData({
     ]);
     setLoading(false);
     setLastRefresh(new Date().toLocaleTimeString());
-    setStatusMessage("Status osvježen");
-    window.setTimeout(() => setStatusMessage(""), 2000);
+    showTransientStatusMessage(setStatusMessage, "Status osvježen", 2000);
   }, [auditDeviceFilter, auditGroupFilter, auditPage, auditPageSize, loadAuditLogs, loadDevices, loadGroups, setLastRefresh, setLoading, setStatusMessage]);
 
   useEffect(() => {
@@ -168,8 +168,7 @@ export function useDeviceData({
       if (document.visibilityState !== "visible") return;
       await loadDevices();
       setLastRefresh(new Date().toLocaleTimeString());
-      setStatusMessage("Automatsko osvježenje statusa");
-      window.setTimeout(() => setStatusMessage(""), 2000);
+      showTransientStatusMessage(setStatusMessage, "Automatsko osvježenje statusa", 2000);
     }, 12000);
 
     return () => window.clearInterval(interval);

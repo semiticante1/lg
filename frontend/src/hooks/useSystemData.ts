@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { BackupInfo, DiagnosticsSummary, HealthSummary } from "../types/app";
+import { fetchJson } from "../utils/api";
 
 interface UseSystemDataOptions {
   baseUrl: string;
@@ -17,6 +18,13 @@ interface UseSystemDataOptions {
   refreshAll: () => Promise<void>;
   showToast: (type: "info" | "success" | "error", title: string, message: string) => void;
   showMessage: (title: string, message: string) => void;
+  showConfirm: (
+    title: string,
+    message: string,
+    onConfirm: () => Promise<void> | void,
+    confirmText?: string,
+    cancelText?: string
+  ) => void;
 }
 
 export function useSystemData(options: UseSystemDataOptions) {
@@ -34,14 +42,14 @@ export function useSystemData(options: UseSystemDataOptions) {
     refreshAll,
     showToast,
     showMessage,
+    showConfirm,
   } = options;
 
   const loadHealthSummary = useCallback(async () => {
     setHealthLoading(true);
     try {
-      const response = await fetch(`${baseUrl}/health/summary`);
-      if (!response.ok) throw new Error(`Health HTTP ${response.status}`);
-      setHealthSummary(await response.json());
+      const data = await fetchJson<HealthSummary>(`${baseUrl}/health/summary`);
+      setHealthSummary(data);
     } catch (error) {
       console.error("Health summary load failed:", error);
       setHealthSummary(null);
@@ -53,9 +61,7 @@ export function useSystemData(options: UseSystemDataOptions) {
   const loadBackups = useCallback(async () => {
     setBackupLoading(true);
     try {
-      const response = await fetch(`${baseUrl}/system/backups`);
-      if (!response.ok) throw new Error(`Backup list HTTP ${response.status}`);
-      const data = await response.json();
+      const data = await fetchJson<{ backups?: BackupInfo[] }>(`${baseUrl}/system/backups`);
       const backups = Array.isArray(data?.backups) ? data.backups : [];
       setBackupList(backups);
       if (backups.length > 0 && !selectedBackup) setSelectedBackup(backups[0].name);
@@ -70,9 +76,8 @@ export function useSystemData(options: UseSystemDataOptions) {
   const loadDiagnostics = useCallback(async () => {
     setDiagnosticsLoading(true);
     try {
-      const response = await fetch(`${baseUrl}/system/diagnostics`);
-      if (!response.ok) throw new Error(`Diagnostics HTTP ${response.status}`);
-      setDiagnostics(await response.json());
+      const data = await fetchJson<DiagnosticsSummary>(`${baseUrl}/system/diagnostics`);
+      setDiagnostics(data);
     } catch (error) {
       console.error("Diagnostics load failed:", error);
       setDiagnostics(null);
@@ -149,25 +154,32 @@ export function useSystemData(options: UseSystemDataOptions) {
       showToast("info", "Restore", "Odaberi backup za restore.");
       return;
     }
-    const confirmed = window.confirm(`Restore iz backupa ${selectedBackup} će prepisati trenutno stanje baze. Nastaviti?`);
-    if (!confirmed) return;
-    try {
-      setBackupLoading(true);
-      const response = await fetch(`${baseUrl}/system/backups/restore`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: selectedBackup }) });
-      if (!response.ok) {
-        const err = await response.json().catch(() => null);
-        throw new Error(err?.error || response.statusText);
-      }
-      showToast("success", "Restore", "Restore je završen. Osvježavam stanje...");
-      await refreshAll();
-      await loadBackups();
-    } catch (error) {
-      console.error("Restore backup failed:", error);
-      showToast("error", "Restore", `Restore nije uspio: ${String((error as Error)?.message || error)}`);
-    } finally {
-      setBackupLoading(false);
-    }
-  }, [baseUrl, loadBackups, refreshAll, selectedBackup, setBackupLoading, showToast]);
+
+    showConfirm(
+      "Restore",
+      `Restore iz backupa ${selectedBackup} će prepisati trenutno stanje baze. Nastaviti?`,
+      async () => {
+        try {
+          setBackupLoading(true);
+          const response = await fetch(`${baseUrl}/system/backups/restore`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fileName: selectedBackup }) });
+          if (!response.ok) {
+            const err = await response.json().catch(() => null);
+            throw new Error(err?.error || response.statusText);
+          }
+          showToast("success", "Restore", "Restore je završen. Osvježavam stanje...");
+          await refreshAll();
+          await loadBackups();
+        } catch (error) {
+          console.error("Restore backup failed:", error);
+          showToast("error", "Restore", `Restore nije uspio: ${String((error as Error)?.message || error)}`);
+        } finally {
+          setBackupLoading(false);
+        }
+      },
+      "Restore",
+      "Odustani"
+    );
+  }, [baseUrl, loadBackups, refreshAll, selectedBackup, setBackupLoading, showConfirm, showToast]);
 
   return {
     loadHealthSummary,

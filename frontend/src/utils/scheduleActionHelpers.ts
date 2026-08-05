@@ -1,4 +1,4 @@
-import type { DeviceSchedule } from "../types/app";
+import type { DeviceSchedule, ScheduleActionParams, ScheduleActionSequence } from "../types/app";
 
 export function formatScheduleStatus(status: string) {
   const normalized = String(status || "").toLowerCase();
@@ -37,7 +37,7 @@ export function formatScheduleTimestamp(createdAt: string) {
 
 export function buildSchedulePayload(
   scheduleAction: string,
-  scheduleSequence: Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>,
+  scheduleSequence: ScheduleActionSequence,
   scheduleDescription: string,
   scheduleEnabled: boolean,
   scheduleTarget: string,

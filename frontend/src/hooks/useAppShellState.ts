@@ -10,6 +10,7 @@ import type {
   Group,
   HealthSummary,
   MessageModalState,
+  ScheduleActionSequence,
   ToastMessage,
 } from "../types/app";
 
@@ -35,7 +36,7 @@ export function useAppShellState() {
   const [scheduleTarget, setScheduleTarget] = useState("");
   const [scheduleDescription, setScheduleDescription] = useState("");
   const [scheduleEnabled, setScheduleEnabled] = useState(true);
-  const [scheduleSequence, setScheduleSequence] = useState<Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>>([]);
+  const [scheduleSequence, setScheduleSequence] = useState<ScheduleActionSequence>([]);
   const [currentStepAction, setCurrentStepAction] = useState("poweron");
   const [editingScheduleId, setEditingScheduleId] = useState<number | null>(null);
   const [detailTab, setDetailTab] = useState<"info" | "schedule">("info");

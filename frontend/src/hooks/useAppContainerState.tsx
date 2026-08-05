@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAppTheme } from "./useAppTheme";
-import { getActivePage } from "../utils/app";
+import { getActivePage, normalizeBackendUrl } from "../utils/app";
 import { useAppShellState } from "./useAppShellState";
 import { useAppDialogs } from "./useAppDialogs";
 import { useAuditData } from "./useAuditData";
@@ -27,8 +27,10 @@ export function useAppContainerState() {
     setStatusMessage: baseState.setStatusMessage,
   });
 
+  const normalizedBaseUrl = normalizeBackendUrl(baseState.backendUrl);
+
   const { loadAuditLogs } = useAuditData({
-    baseUrl: baseState.backendUrl.replace(/\/$/, ""),
+    baseUrl: normalizedBaseUrl,
     auditPage: baseState.auditPage,
     auditPageSize: baseState.auditPageSize,
     setAuditLogs: baseState.setAuditLogs,
@@ -51,7 +53,7 @@ export function useAppContainerState() {
     setDiscoveredDevices: setDiscoveredDevicesState,
     setStatusMessage: setCurrentStatusMessage,
   } = useDeviceData({
-    baseUrl: baseState.backendUrl.replace(/\/$/, ""),
+    baseUrl: normalizedBaseUrl,
     auditDeviceFilter: baseState.auditDeviceFilter,
     auditGroupFilter: baseState.auditGroupFilter,
     auditPage: baseState.auditPage,
@@ -82,7 +84,7 @@ export function useAppContainerState() {
     handleCreateBackup,
     handleRestoreBackup,
   } = useSystemData({
-    baseUrl: baseState.backendUrl.replace(/\/$/, ""),
+    baseUrl: normalizedBaseUrl,
     activePage,
     diagnostics: baseState.diagnostics,
     selectedBackup: baseState.selectedBackup,
@@ -96,10 +98,11 @@ export function useAppContainerState() {
     refreshAll,
     showToast,
     showMessage,
+    showConfirm,
   });
 
   useRealtimeDeviceSync({
-    baseUrl: baseState.backendUrl.replace(/\/$/, ""),
+    baseUrl: normalizedBaseUrl,
     setDevices: baseState.setDevices,
     devicesRef,
     setLastRefresh: baseState.setLastRefresh,
@@ -109,7 +112,7 @@ export function useAppContainerState() {
   });
 
   const deviceHooks = useAppContainerDeviceHooks({
-    baseUrl: baseState.backendUrl.replace(/\/$/, ""),
+    baseUrl: normalizedBaseUrl,
     ...baseState,
     navigate,
     loadAuditLogs,

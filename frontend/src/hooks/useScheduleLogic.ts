@@ -1,24 +1,25 @@
 import { useCallback } from "react";
-import type { Device, DeviceSchedule } from "../types/app";
+import type { Device, DeviceSchedule, ScheduleActionParams, ScheduleActionSequence } from "../types/app";
+import type { SetStateAction } from "react";
 import { getAvailableActionsForDevice } from "../utils/schedule";
 
 interface UseScheduleLogicOptions {
   baseUrl: string;
   selectedDevice: Device | null;
   selectedDeviceId: number | null;
-  setDeviceSchedules: (value: React.SetStateAction<Record<number, DeviceSchedule[]>>) => void;
+  setDeviceSchedules: (value: SetStateAction<Record<number, DeviceSchedule[]>>) => void;
   setDetailTab: (value: "info" | "schedule") => void;
   setScheduleCron: (value: string) => void;
   setScheduleAction: (value: string) => void;
   setScheduleTarget: (value: string) => void;
   setScheduleDescription: (value: string) => void;
   setScheduleEnabled: (value: boolean) => void;
-  setScheduleSequence: (value: Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>) => void;
+  setScheduleSequence: (value: ScheduleActionSequence) => void;
   setScheduleUseTime: (value: boolean) => void;
   setScheduleTime: (value: string) => void;
   setEditingScheduleId: (value: number | null) => void;
   scheduleAction: string;
-  scheduleSequence: Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>;
+  scheduleSequence: ScheduleActionSequence;
   scheduleDescription: string;
   scheduleEnabled: boolean;
   scheduleTarget: string;
@@ -75,7 +76,7 @@ export function useScheduleLogic(options: UseScheduleLogicOptions) {
   }, [setEditingScheduleId, setScheduleAction, setScheduleCron, setScheduleDescription, setScheduleEnabled, setScheduleSequence, setScheduleTarget, setScheduleTime, setScheduleUseTime]);
 
   const handleEditSchedule = useCallback((schedule: DeviceSchedule) => {
-    const actionParams = (schedule.action_params ?? {}) as Record<string, unknown>;
+    const actionParams = (schedule.action_params ?? {}) as ScheduleActionParams;
     const available = getAvailableActionsForDevice(selectedDevice);
     const supportedAction = available.some((action) => action.value === schedule.action)
       ? schedule.action
@@ -100,7 +101,7 @@ export function useScheduleLogic(options: UseScheduleLogicOptions) {
     setDetailTab("schedule");
     try {
       if (schedule.action === "sequence" && Array.isArray(actionParams.sequence)) {
-        setScheduleSequence(actionParams.sequence.map((s) => ({ ...(s as { action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }) })));
+        setScheduleSequence(actionParams.sequence.map((s) => ({ ...(s as ScheduleActionSequence[0]) })));
       } else {
         setScheduleSequence([]);
       }
@@ -247,8 +248,12 @@ export function useScheduleLogic(options: UseScheduleLogicOptions) {
       return;
     }
 
-    let payload: { cron: string; actions: Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>; description: string; enabled: boolean } | { cron: string; action: string; action_params: Record<string, unknown>; description: string; enabled: boolean };
-    if (Array.isArray(scheduleSequence) && scheduleSequence.length > 0) {
+    type ScheduleSavePayload =
+      | { cron: string; actions: ScheduleActionSequence; description: string; enabled: boolean }
+      | { cron: string; action: string; action_params: ScheduleActionParams; description: string; enabled: boolean };
+
+    let payload: ScheduleSavePayload;
+    if (scheduleSequence.length > 0) {
       payload = {
         cron: data.cron,
         actions: scheduleSequence.map((s) => ({ action: s.action, params: s.params || {}, delayMs: s.delayMs || undefined, waitForReadyMs: s.waitForReadyMs || undefined, settleMs: s.settleMs || undefined })),
@@ -259,7 +264,12 @@ export function useScheduleLogic(options: UseScheduleLogicOptions) {
       payload = {
         cron: data.cron,
         action: scheduleAction,
-        action_params: scheduleAction === "launchApp" ? { target: scheduleTarget.trim() } : scheduleAction === "setVolume" ? { volume: Number(scheduleTarget) } : {},
+        action_params:
+          scheduleAction === "launchApp"
+            ? { target: scheduleTarget.trim() }
+            : scheduleAction === "setVolume"
+            ? { volume: Number(scheduleTarget) }
+            : {},
         description: scheduleDescription.trim(),
         enabled: scheduleEnabled,
       };

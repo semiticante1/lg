@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import { isValidIp, isValidMac } from "../utils/device";
+import { showTransientStatusMessage } from "../utils/app";
 import type { Dispatch, SetStateAction } from "react";
 import type { Device, Group, MessageModalState } from "../types/app";
 
@@ -162,8 +163,7 @@ export function useDeviceEditorActions({
 
       clearModalFields();
       setShowModal(false);
-      setStatusMessage("Uređaj je uspješno spremljen.");
-      window.setTimeout(() => setStatusMessage(""), 2500);
+      showTransientStatusMessage(setStatusMessage, "Uređaj je uspješno spremljen.", 2500);
     } catch (error) {
       console.error("Spremanje uređaja nije uspjelo:", error);
       showMessage("Greška", "Greška pri spremanju uređaja. Provjeri je li backend pokrenut.");

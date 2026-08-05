@@ -16,3 +16,16 @@ export function getActivePage(pathname: string): AppPage {
       return "notfound";
   }
 }
+
+export function normalizeBackendUrl(url: string) {
+  return url.replace(/\/$/, "");
+}
+
+export function showTransientStatusMessage(
+  setStatusMessage: (value: string) => void,
+  message: string,
+  delay = 2500
+) {
+  setStatusMessage(message);
+  window.setTimeout(() => setStatusMessage(""), delay);
+}

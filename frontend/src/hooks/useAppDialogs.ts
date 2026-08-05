@@ -37,11 +37,7 @@ export function useAppDialogs({ setToastMessages, setMessageModal, setStatusMess
     setMessageModal({ title, message, confirmText, cancelText, onConfirm });
   }, [setMessageModal]);
 
-  const clearStatusMessage = useCallback((delay = 2500) => {
-    window.setTimeout(() => setStatusMessage(""), delay);
-  }, [setStatusMessage]);
-
   const closeMessageModal = useCallback(() => setMessageModal(null), [setMessageModal]);
 
-  return { removeToast, showToast, showMessage, showConfirm, clearStatusMessage, closeMessageModal };
+  return { removeToast, showToast, showMessage, showConfirm, closeMessageModal };
 }

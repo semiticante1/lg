@@ -8,6 +8,7 @@ import type {
   DiscoveredDevice,
   Group,
   MessageModalState,
+  ScheduleActionSequence,
 } from "../../types/app";
 
 export type ToastType = "info" | "success" | "error";
@@ -70,7 +71,7 @@ export interface UseDeviceActionsOptions {
   setMessageModal: Dispatch<SetStateAction<MessageModalState | null>>;
   setDetailTab: Dispatch<SetStateAction<"info" | "schedule">>;
   scheduleAction: string;
-  scheduleSequence: Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>;
+  scheduleSequence: ScheduleActionSequence;
   scheduleDescription: string;
   scheduleEnabled: boolean;
   scheduleTarget: string;
@@ -80,7 +81,7 @@ export interface UseDeviceActionsOptions {
   setScheduleTarget: Dispatch<SetStateAction<string>>;
   setScheduleDescription: Dispatch<SetStateAction<string>>;
   setScheduleEnabled: Dispatch<SetStateAction<boolean>>;
-  setScheduleSequence: Dispatch<SetStateAction<Array<{ action: string; params?: Record<string, unknown>; delayMs?: number; waitForReadyMs?: number; settleMs?: number }>>>;
+  setScheduleSequence: Dispatch<SetStateAction<ScheduleActionSequence>>;
   setScheduleUseTime: Dispatch<SetStateAction<boolean>>;
   setScheduleTime: Dispatch<SetStateAction<string>>;
   setEditingScheduleId: Dispatch<SetStateAction<number | null>>;

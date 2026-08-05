@@ -26,12 +26,24 @@ export interface DeviceHistoryEntry {
   note: string;
 }
 
+export type ScheduleActionParams = Record<string, unknown>;
+
+export interface ScheduleActionSequenceItem {
+  action: string;
+  params?: ScheduleActionParams;
+  delayMs?: number;
+  waitForReadyMs?: number;
+  settleMs?: number;
+}
+
+export type ScheduleActionSequence = ScheduleActionSequenceItem[];
+
 export interface DeviceSchedule {
   id: number;
   device_id: number;
   cron: string;
   action: string;
-  action_params: Record<string, unknown>;
+  action_params: ScheduleActionParams;
   description: string | null;
   enabled: boolean;
 }

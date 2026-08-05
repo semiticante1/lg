@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { showTransientStatusMessage } from "../utils/app";
 import type { AuditLogEntry, BackupInfo, Device, DeviceHistoryEntry, DiagnosticsSummary, DiscoveredDevice, Group, HealthSummary, ToastMessage } from "../types/app";
 
 interface UseAppDataOptions {
@@ -216,8 +217,7 @@ export function useAppData(options: UseAppDataOptions) {
     await Promise.all([loadDevices(), loadGroups(), loadAuditLogs(auditDeviceFilter, auditGroupFilter), loadHealthSummary()]);
     setLoading(false);
     setLastRefresh(new Date().toLocaleTimeString());
-    setStatusMessage("Status osvježen");
-    setTimeout(() => setStatusMessage(""), 2000);
+    showTransientStatusMessage(setStatusMessage, "Status osvježen", 2000);
   }, [auditDeviceFilter, auditGroupFilter, loadAuditLogs, loadDevices, loadGroups, loadHealthSummary, setLastRefresh, setLoading, setStatusMessage]);
 
   useEffect(() => {
@@ -235,8 +235,7 @@ export function useAppData(options: UseAppDataOptions) {
       if (document.visibilityState !== "visible") return;
       await loadDevices();
       setLastRefresh(new Date().toLocaleTimeString());
-      setStatusMessage("Automatsko osvježenje statusa");
-      setTimeout(() => setStatusMessage(""), 2000);
+      showTransientStatusMessage(setStatusMessage, "Automatsko osvježenje statusa", 2000);
     }, 12000);
     return () => window.clearInterval(interval);
   }, [loadDevices, setLastRefresh, setStatusMessage]);
