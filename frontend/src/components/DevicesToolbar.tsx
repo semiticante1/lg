@@ -8,53 +8,57 @@ import type { FC } from 'react';
 import type { Device, Group } from '../types/app';
 
 type DevicesToolbarProps = {
-  search: string;
-  setSearch: (value: string) => void;
-  groupFilter: number | null;
-  setGroupFilter: (value: number | null) => void;
-  registrationFrom: string;
-  setRegistrationFrom: (value: string) => void;
-  registrationTo: string;
-  setRegistrationTo: (value: string) => void;
-  selectedDevice: Device | null;
-  handleClearSelection: () => void;
-  handleRestartSelected: () => void;
-  handleDeleteSelected: () => void;
-  openAssignGroupModal: () => void;
-  loading: boolean;
-  filteredDevices: Device[];
-  groups: Group[];
-  statusFilter: string;
-  setStatusFilter: (value: string) => void;
-  powerFilter: string;
-  setPowerFilter: (value: string) => void;
-  activityFilter: string;
-  setActivityFilter: (value: string) => void;
+  toolbarProps: {
+    search: string;
+    setSearch: (value: string) => void;
+    groupFilter: number | null;
+    setGroupFilter: (value: number | null) => void;
+    registrationFrom: string;
+    setRegistrationFrom: (value: string) => void;
+    registrationTo: string;
+    setRegistrationTo: (value: string) => void;
+    selectedDevice: Device | null;
+    handleClearSelection: () => void;
+    handleRestartSelected: () => void;
+    handleDeleteSelected: () => void;
+    openAssignGroupModal: () => void;
+    loading: boolean;
+    filteredDevices: Device[];
+    groups: Group[];
+    statusFilter: string;
+    setStatusFilter: (value: string) => void;
+    powerFilter: string;
+    setPowerFilter: (value: string) => void;
+    activityFilter: string;
+    setActivityFilter: (value: string) => void;
+  };
 };
 
 export const DevicesToolbar: FC<DevicesToolbarProps> = ({
-  search,
-  setSearch,
-  groupFilter,
-  setGroupFilter,
-  registrationFrom,
-  setRegistrationFrom,
-  registrationTo,
-  setRegistrationTo,
-  selectedDevice,
-  handleClearSelection,
-  handleRestartSelected,
-  handleDeleteSelected,
-  openAssignGroupModal,
-  loading,
-  filteredDevices,
-  groups,
-  statusFilter,
-  setStatusFilter,
-  powerFilter,
-  setPowerFilter,
-  activityFilter,
-  setActivityFilter,
+  toolbarProps: {
+    search,
+    setSearch,
+    groupFilter,
+    setGroupFilter,
+    registrationFrom,
+    setRegistrationFrom,
+    registrationTo,
+    setRegistrationTo,
+    selectedDevice,
+    handleClearSelection,
+    handleRestartSelected,
+    handleDeleteSelected,
+    openAssignGroupModal,
+    loading,
+    filteredDevices,
+    groups,
+    statusFilter,
+    setStatusFilter,
+    powerFilter,
+    setPowerFilter,
+    activityFilter,
+    setActivityFilter,
+  },
 }) => (
   <>
     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>

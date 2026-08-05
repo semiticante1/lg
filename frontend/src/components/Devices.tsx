@@ -6,7 +6,7 @@ import Pagination from '@mui/material/Pagination';
 import PaginationItem from '@mui/material/PaginationItem';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
-import { useState, type FC } from 'react';
+import type { FC } from 'react';
 import type {
   Device,
   DeviceHistoryEntry,
@@ -19,6 +19,7 @@ import { DeviceDialogs } from './DeviceDialogs';
 import { DeviceDetailsPanel } from './DeviceDetailsPanel';
 import { DevicesToolbar } from './DevicesToolbar';
 import { DeviceTable } from './DeviceTable';
+import { useDevicesPageState } from '../hooks/useDevicesPageState';
 
 interface Props {
   devices: Device[];
@@ -92,83 +93,18 @@ interface Props {
 }
 
 const Devices: FC<Props> = (props) => {
+  const { devices, filteredDevices, loading, selectedDevice } = props;
+
   const {
-    devices,
-    search,
-    setSearch,
-    groupFilter,
-    setGroupFilter,
-    registrationFrom,
-    setRegistrationFrom,
-    registrationTo,
-    setRegistrationTo,
-    selectedDevice,
-    handleClearSelection,
-    handleRestartSelected,
-    handleDeleteSelected,
-    openAssignGroupModal,
-    loading,
-    filteredDevices,
-    toggleDevice,
-    formatPowerText,
-    formatStatusText,
-    handleViewDevice,
-    setEditingId,
-    setDeviceName,
-    setDeviceIp,
-    setDeviceMac,
-    setModalGroupId,
-    setShowModal,
-    handleOpenAuditForDevice,
-    handleRestartDevice,
-    setPendingDelete,
-    setShowDeleteConfirm,
-    showDeleteConfirm,
-    cancelDelete,
-    confirmDelete,
-    showAssignGroupModal,
-    setShowAssignGroupModal,
-    selectedAssignGroupId,
-    setSelectedAssignGroupId,
-    assignGroupToSelected,
-    messageModal,
-    setMessageModal,
-    closeMessageModal,
-    handleMessageConfirm,
-    selectedDeviceHistory,
-    volumeValue,
-    setVolumeValue,
-    launchTarget,
-    setLaunchTarget,
-    detailTab,
-    setDetailTab,
-    getDeviceSchedules,
-    getAvailableActionsForDevice,
-    getActionLabel,
-    handleToggleSchedule,
-    fetchScheduleLogs,
-    handleTriggerSchedule,
-    handleEditSchedule,
-    handleDeleteSchedule,
-    setShowScheduleBuilder,
-    handlePowerOnDevice,
-    handlePowerOffDevice,
-    handleSendDeviceAction,
-    statusFilter,
-    setStatusFilter,
-    powerFilter,
-    setPowerFilter,
-    activityFilter,
-    setActivityFilter,
-    groups,
-  } = props;
-
-  const [devicePage, setDevicePage] = useState(1);
-  const pageSize = 10;
-
-  const totalDevicePages = Math.max(1, Math.ceil(filteredDevices.length / pageSize));
-  const currentPage = Math.max(1, Math.min(devicePage, totalDevicePages));
-  const paginatedDevices = filteredDevices.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    toolbarProps,
+    tableProps,
+    detailsProps,
+    dialogsProps,
+    paginatedDevices,
+    totalDevicePages,
+    currentPage,
+    setDevicePage,
+  } = useDevicesPageState(props);
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -183,30 +119,7 @@ const Devices: FC<Props> = (props) => {
 
       <DeviceSummaryCards devices={devices} />
 
-      <DevicesToolbar
-        search={search}
-        setSearch={setSearch}
-        groupFilter={groupFilter}
-        setGroupFilter={setGroupFilter}
-        registrationFrom={registrationFrom}
-        setRegistrationFrom={setRegistrationFrom}
-        registrationTo={registrationTo}
-        setRegistrationTo={setRegistrationTo}
-        selectedDevice={selectedDevice}
-        handleClearSelection={handleClearSelection}
-        handleRestartSelected={handleRestartSelected}
-        handleDeleteSelected={handleDeleteSelected}
-        openAssignGroupModal={openAssignGroupModal}
-        loading={loading}
-        filteredDevices={filteredDevices}
-        groups={groups}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-        powerFilter={powerFilter}
-        setPowerFilter={setPowerFilter}
-        activityFilter={activityFilter}
-        setActivityFilter={setActivityFilter}
-      />
+      <DevicesToolbar toolbarProps={toolbarProps} />
 
       <Paper variant="outlined" sx={{ overflow: 'hidden', mb: 3 }}>
         {loading ? (
@@ -215,29 +128,7 @@ const Devices: FC<Props> = (props) => {
             <Typography variant="body2">Učitavanje...</Typography>
           </Box>
         ) : (
-          <DeviceTable
-            loading={loading}
-            filteredDevices={filteredDevices}
-            paginatedDevices={paginatedDevices}
-            toggleDevice={toggleDevice}
-            formatPowerText={formatPowerText}
-            formatStatusText={formatStatusText}
-            handleViewDevice={handleViewDevice}
-            onEditDevice={(device: Device) => {
-              setEditingId(device.id);
-              setDeviceName(device.name);
-              setDeviceIp(device.ip);
-              setDeviceMac(device.mac);
-              setModalGroupId(device.groupId ?? null);
-              setShowModal(true);
-            }}
-            handleOpenAuditForDevice={handleOpenAuditForDevice}
-            handleRestartDevice={handleRestartDevice}
-            onDeleteDevice={(id: number) => {
-              setPendingDelete(id);
-              setShowDeleteConfirm(true);
-            }}
-          />
+          <DeviceTable tableProps={tableProps} />
         )}
       </Paper>
 
@@ -256,47 +147,9 @@ const Devices: FC<Props> = (props) => {
         />
       </Box>
 
-      {selectedDevice && (
-        <DeviceDetailsPanel
-          selectedDevice={selectedDevice}
-          selectedDeviceHistory={selectedDeviceHistory}
-          detailTab={detailTab}
-          setDetailTab={setDetailTab}
-          handlePowerOnDevice={handlePowerOnDevice}
-          handlePowerOffDevice={handlePowerOffDevice}
-          handleRestartDevice={handleRestartDevice}
-          handleSendDeviceAction={handleSendDeviceAction}
-          volumeValue={volumeValue}
-          setVolumeValue={setVolumeValue}
-          launchTarget={launchTarget}
-          setLaunchTarget={setLaunchTarget}
-          getDeviceSchedules={getDeviceSchedules}
-          getActionLabel={getActionLabel}
-          handleToggleSchedule={handleToggleSchedule}
-          fetchScheduleLogs={fetchScheduleLogs}
-          handleTriggerSchedule={handleTriggerSchedule}
-          handleEditSchedule={handleEditSchedule}
-          handleDeleteSchedule={handleDeleteSchedule}
-          setShowScheduleBuilder={setShowScheduleBuilder}
-        />
-      )}
+      {selectedDevice && detailsProps && <DeviceDetailsPanel detailsProps={detailsProps} />}
 
-      <DeviceDialogs
-        showDeleteConfirm={showDeleteConfirm}
-        setShowDeleteConfirm={setShowDeleteConfirm}
-        cancelDelete={cancelDelete}
-        confirmDelete={confirmDelete}
-        showAssignGroupModal={showAssignGroupModal}
-        setShowAssignGroupModal={setShowAssignGroupModal}
-        selectedAssignGroupId={selectedAssignGroupId}
-        groups={groups}
-        setSelectedAssignGroupId={setSelectedAssignGroupId}
-        assignGroupToSelected={assignGroupToSelected}
-        messageModal={messageModal}
-        setMessageModal={setMessageModal}
-        closeMessageModal={closeMessageModal}
-        handleMessageConfirm={handleMessageConfirm}
-      />
+      <DeviceDialogs dialogsProps={dialogsProps} />
     </Container>
   );
 };

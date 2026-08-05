@@ -12,49 +12,53 @@ import type { FC } from 'react';
 import type { Device, DeviceHistoryEntry, DeviceSchedule } from '../types/app';
 
 export type DeviceDetailsPanelProps = {
-  selectedDevice: Device;
-  selectedDeviceHistory: DeviceHistoryEntry[];
-  detailTab: 'info' | 'schedule';
-  setDetailTab: (value: 'info' | 'schedule') => void;
-  handlePowerOnDevice: (id: number) => void;
-  handlePowerOffDevice: (id: number) => void;
-  handleRestartDevice: (id: number) => void;
-  handleSendDeviceAction: (id: number, action: string, params?: Record<string, unknown>) => void;
-  volumeValue: string;
-  setVolumeValue: (value: string) => void;
-  launchTarget: string;
-  setLaunchTarget: (value: string) => void;
-  getDeviceSchedules: (deviceId: number) => DeviceSchedule[];
-  getActionLabel: (action: string) => string;
-  handleToggleSchedule: (schedule: DeviceSchedule) => void;
-  fetchScheduleLogs: (schedule: DeviceSchedule) => void;
-  handleTriggerSchedule: (schedule: DeviceSchedule) => void;
-  handleEditSchedule: (schedule: DeviceSchedule) => void;
-  handleDeleteSchedule: (scheduleId: number) => void;
-  setShowScheduleBuilder: (value: boolean) => void;
+  detailsProps: {
+    selectedDevice: Device;
+    selectedDeviceHistory: DeviceHistoryEntry[];
+    detailTab: 'info' | 'schedule';
+    setDetailTab: (value: 'info' | 'schedule') => void;
+    handlePowerOnDevice: (id: number) => void;
+    handlePowerOffDevice: (id: number) => void;
+    handleRestartDevice: (id: number) => void;
+    handleSendDeviceAction: (id: number, action: string, params?: Record<string, unknown>) => void;
+    volumeValue: string;
+    setVolumeValue: (value: string) => void;
+    launchTarget: string;
+    setLaunchTarget: (value: string) => void;
+    getDeviceSchedules: (deviceId: number) => DeviceSchedule[];
+    getActionLabel: (action: string) => string;
+    handleToggleSchedule: (schedule: DeviceSchedule) => void;
+    fetchScheduleLogs: (schedule: DeviceSchedule) => void;
+    handleTriggerSchedule: (schedule: DeviceSchedule) => void;
+    handleEditSchedule: (schedule: DeviceSchedule) => void;
+    handleDeleteSchedule: (scheduleId: number) => void;
+    setShowScheduleBuilder: (value: boolean) => void;
+  };
 };
 
 export const DeviceDetailsPanel: FC<DeviceDetailsPanelProps> = ({
-  selectedDevice,
-  selectedDeviceHistory,
-  detailTab,
-  setDetailTab,
-  handlePowerOnDevice,
-  handlePowerOffDevice,
-  handleRestartDevice,
-  handleSendDeviceAction,
-  volumeValue,
-  setVolumeValue,
-  launchTarget,
-  setLaunchTarget,
-  getDeviceSchedules,
-  getActionLabel,
-  handleToggleSchedule,
-  fetchScheduleLogs,
-  handleTriggerSchedule,
-  handleEditSchedule,
-  handleDeleteSchedule,
-  setShowScheduleBuilder,
+  detailsProps: {
+    selectedDevice,
+    selectedDeviceHistory,
+    detailTab,
+    setDetailTab,
+    handlePowerOnDevice,
+    handlePowerOffDevice,
+    handleRestartDevice,
+    handleSendDeviceAction,
+    volumeValue,
+    setVolumeValue,
+    launchTarget,
+    setLaunchTarget,
+    getDeviceSchedules,
+    getActionLabel,
+    handleToggleSchedule,
+    fetchScheduleLogs,
+    handleTriggerSchedule,
+    handleEditSchedule,
+    handleDeleteSchedule,
+    setShowScheduleBuilder,
+  },
 }) => (
   <Paper sx={{ p: 3 }}>
     <Typography variant="h6" sx={{ mb: 2 }}>Detalji uređaja</Typography>

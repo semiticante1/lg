@@ -20,31 +20,35 @@ import type { FC } from 'react';
 import type { Device } from '../types/app';
 
 interface DeviceTableProps {
-  loading: boolean;
-  filteredDevices: Device[];
-  paginatedDevices: Device[];
-  toggleDevice: (id: number) => void;
-  formatPowerText: (value: string) => string;
-  formatStatusText: (value: string) => string;
-  handleViewDevice: (id: number) => void;
-  onEditDevice: (device: Device) => void;
-  handleOpenAuditForDevice: (id: number) => void;
-  handleRestartDevice: (id: number) => void;
-  onDeleteDevice: (id: number) => void;
+  tableProps: {
+    loading: boolean;
+    filteredDevices: Device[];
+    paginatedDevices: Device[];
+    toggleDevice: (id: number) => void;
+    formatPowerText: (value: string) => string;
+    formatStatusText: (value: string) => string;
+    handleViewDevice: (id: number) => void;
+    onEditDevice: (device: Device) => void;
+    handleOpenAuditForDevice: (id: number) => void;
+    handleRestartDevice: (id: number) => void;
+    onDeleteDevice: (id: number) => void;
+  };
 }
 
 export const DeviceTable: FC<DeviceTableProps> = ({
-  loading,
-  filteredDevices,
-  paginatedDevices,
-  toggleDevice,
-  formatPowerText,
-  formatStatusText,
-  handleViewDevice,
-  onEditDevice,
-  handleOpenAuditForDevice,
-  handleRestartDevice,
-  onDeleteDevice,
+  tableProps: {
+    loading,
+    filteredDevices,
+    paginatedDevices,
+    toggleDevice,
+    formatPowerText,
+    formatStatusText,
+    handleViewDevice,
+    onEditDevice,
+    handleOpenAuditForDevice,
+    handleRestartDevice,
+    onDeleteDevice,
+  },
 }) => (
   <TableContainer>
     <Table size="small">

@@ -11,37 +11,41 @@ import type { FC } from 'react';
 import type { Group, MessageModalState } from '../types/app';
 
 export type DeviceDialogsProps = {
-  showDeleteConfirm: boolean;
-  setShowDeleteConfirm: (value: boolean) => void;
-  cancelDelete: () => void;
-  confirmDelete: () => void;
-  showAssignGroupModal: boolean;
-  setShowAssignGroupModal: (value: boolean) => void;
-  selectedAssignGroupId: number | null;
-  groups: Group[];
-  setSelectedAssignGroupId: (value: number | null) => void;
-  assignGroupToSelected: () => void;
-  messageModal: MessageModalState | null;
-  setMessageModal: (value: MessageModalState | null) => void;
-  closeMessageModal: () => void;
-  handleMessageConfirm: () => void;
+  dialogsProps: {
+    showDeleteConfirm: boolean;
+    setShowDeleteConfirm: (value: boolean) => void;
+    cancelDelete: () => void;
+    confirmDelete: () => void;
+    showAssignGroupModal: boolean;
+    setShowAssignGroupModal: (value: boolean) => void;
+    selectedAssignGroupId: number | null;
+    groups: Group[];
+    setSelectedAssignGroupId: (value: number | null) => void;
+    assignGroupToSelected: () => void;
+    messageModal: MessageModalState | null;
+    setMessageModal: (value: MessageModalState | null) => void;
+    closeMessageModal: () => void;
+    handleMessageConfirm: () => void;
+  };
 };
 
 export const DeviceDialogs: FC<DeviceDialogsProps> = ({
-  showDeleteConfirm,
-  setShowDeleteConfirm,
-  cancelDelete,
-  confirmDelete,
-  showAssignGroupModal,
-  setShowAssignGroupModal,
-  selectedAssignGroupId,
-  groups,
-  setSelectedAssignGroupId,
-  assignGroupToSelected,
-  messageModal,
-  setMessageModal,
-  closeMessageModal,
-  handleMessageConfirm,
+  dialogsProps: {
+    showDeleteConfirm,
+    setShowDeleteConfirm,
+    cancelDelete,
+    confirmDelete,
+    showAssignGroupModal,
+    setShowAssignGroupModal,
+    selectedAssignGroupId,
+    groups,
+    setSelectedAssignGroupId,
+    assignGroupToSelected,
+    messageModal,
+    setMessageModal,
+    closeMessageModal,
+    handleMessageConfirm,
+  },
 }) => (
   <>
     <Dialog open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)}>
